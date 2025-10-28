@@ -20,3 +20,41 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+
+Virtual Environments
+
+Python Virtual Environments (standard names)
+
+/venv
+/.venv
+/env
+/ENV
+
+Dependencies (if installed locally in project directory)
+
+/lib/
+/include/
+/bin/
+
+Byte-compiled / optimized files
+
+pycache/
+*.pyc
+*.pyd
+*.pyo
+
+Build artifacts
+
+/dist
+/build
+/*.egg-info/
+.eggs/
+
+IDE specific files (optional but recommended)
+
+.vscode/
+
+Operating System Files
+
+.DS_Store
+Thumbs.db
