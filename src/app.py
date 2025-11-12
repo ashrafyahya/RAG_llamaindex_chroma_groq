@@ -1,15 +1,23 @@
-from chroma_setup import setup_chroma
-from llama_index.core import Settings
-from memory import ConversationBuffer
 from chroma_search import ChromaEmbeddingSearch
 from llama_index.core import SimpleDirectoryReader
+from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-
+from llama_index.core import Settings
 from groq import Groq
 import os
 
+from config import MODEL_NAME, TOKEN_LIMIT
+from chroma_setup import setup_chroma
 from dotenv import load_dotenv
 load_dotenv()
+
+
+try:
+    memory = ChatMemoryBuffer.from_defaults(token_limit=TOKEN_LIMIT)
+except Exception as e:
+    print(f"Error initializing memory: {e}")
+    memory = ChatMemoryBuffer.from_defaults(token_limit=1000)  # Fallback
+
 
 # Initialize the embedding model
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
@@ -24,7 +32,11 @@ groq_api_key = os.environ.get("groq_api_key")
 groq_client = Groq(api_key=groq_api_key)
 
 # Initialize conversation history
-conversation_buffer = ConversationBuffer(max_messages=10)
+
+memory = ChatMemoryBuffer.from_defaults(
+    token_limit=2000,
+)
+
 
 #Load documents and store them in ChromaDB
 def load_documents():
@@ -78,8 +90,8 @@ def query_documents(query: str, n_results: int = 3):
     # Format context from documents
     context = format_search_results(results, query)
     
-    # Add current query to conversation history
-    conversation_buffer.add_message("user", query)
+    # Get chat history from memory
+    chat_history = memory.get()
     
      # Define the structured prompt
     system_prompt = """
@@ -103,22 +115,24 @@ def query_documents(query: str, n_results: int = 3):
     # Prepare messages with conversation history
     messages = [
         {"role": "system", "content": system_prompt},
-        *conversation_buffer.get_messages(),
+        *chat_history,
         {"role": "user", "content": f"Context: {context}\n\nQuestion: {query}"}
     ]
     
     # Use Groq to generate answer
     response = groq_client.chat.completions.create(
         messages=messages,
-        model="llama-3.1-8b-instant" 
+        model=MODEL_NAME,
+        temperature=0.2, 
     )
     
     # Extract and store the model's response
     generated_answer  = response.choices[0].message.content
     
-    # Store the response
-    conversation_buffer.add_message("assistant", generated_answer)
-    
+    # Store the interaction in memory
+    memory.put(("user", query))
+    memory.put(("assistant", generated_answer))
+
     
     return generated_answer 
 
