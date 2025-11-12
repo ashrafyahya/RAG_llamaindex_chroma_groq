@@ -1,22 +1,17 @@
-from chroma_search import ChromaEmbeddingSearch
-from llama_index.core import SimpleDirectoryReader
-from llama_index.core.memory import ChatMemoryBuffer
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.core import Settings
-from groq import Groq
 import os
 
-from config import MODEL_NAME, TOKEN_LIMIT
+from llama_index.core import Settings, SimpleDirectoryReader
+from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.groq import Groq as LlamaGroq
+
+from chroma_search import ChromaEmbeddingSearch
 from chroma_setup import setup_chroma
+from config import MODEL_NAME, TOKEN_LIMIT
+
 from dotenv import load_dotenv
 load_dotenv()
-
-
-try:
-    memory = ChatMemoryBuffer.from_defaults(token_limit=TOKEN_LIMIT)
-except Exception as e:
-    print(f"Error initializing memory: {e}")
-    memory = ChatMemoryBuffer.from_defaults(token_limit=1000)  # Fallback
 
 
 # Initialize the embedding model
@@ -27,14 +22,14 @@ chroma_client, collection = setup_chroma()
 print(f"ChromaDB initialized with collection: {collection.name}\n")
 search = ChromaEmbeddingSearch()
 
-# Initialize Groq client
+# Initialize Groq LLM for LlamaIndex
 groq_api_key = os.environ.get("groq_api_key")
-groq_client = Groq(api_key=groq_api_key)
+groq_llm = LlamaGroq(api_key=groq_api_key, model=MODEL_NAME)
 
 # Initialize conversation history
-
 memory = ChatMemoryBuffer.from_defaults(
-    token_limit=2000,
+    token_limit=TOKEN_LIMIT,
+    llm=groq_llm,
 )
 
 
@@ -86,16 +81,16 @@ def query_documents(query: str, n_results: int = 3):
         query_texts=[query],
         n_results=n_results
     )
-    
+
     # Format context from documents
     context = format_search_results(results, query)
-    
+
     # Get chat history from memory
     chat_history = memory.get()
-    
+
      # Define the structured prompt
     system_prompt = """
-    You are an expert research assistant specializing in Agentic AI. 
+    You are an expert research assistant specializing in Agentic AI.
     Your task is to answer questions based on the provided context.
 
     Core Components:
@@ -111,35 +106,38 @@ def query_documents(query: str, n_results: int = 3):
     - Tone: Maintain a professional, informative, and helpful tone.
     - Goal: Deliver accurate, well-structured information about Agentic AI based solely on the provided context.
     """
-    
+
     # Prepare messages with conversation history
     messages = [
-        {"role": "system", "content": system_prompt},
+        ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
         *chat_history,
-        {"role": "user", "content": f"Context: {context}\n\nQuestion: {query}"}
+        ChatMessage(role=MessageRole.USER, content=f"Context: {context}\n\nQuestion: {query}")
     ]
-    
-    # Use Groq to generate answer
-    response = groq_client.chat.completions.create(
-        messages=messages,
-        model=MODEL_NAME,
-        temperature=0.2, 
-    )
-    
-    # Extract and store the model's response
-    generated_answer  = response.choices[0].message.content
-    
-    # Store the interaction in memory
-    memory.put(("user", query))
-    memory.put(("assistant", generated_answer))
 
-    
-    return generated_answer 
+    # Use Groq LLM to generate answer
+    response = groq_llm.chat(messages)
+
+    # Extract and store the model's response
+    generated_answer = response.message.content
+
+    # Store the interaction in memory
+    memory.put(ChatMessage(role=MessageRole.USER, content=query))
+    memory.put(ChatMessage(role=MessageRole.ASSISTANT, content=generated_answer))
+
+
+    return generated_answer
+
+def chat_with_rag():
+    while True:
+        query = input("\nEnter your query (or 'quit' to exit): ")
+        if query.lower() in ['quit', 'exit', 'q']:
+            break
+            
+        response = query_documents(query)
+        print("\nResponse:\n", response)
 
 
 if __name__ == "__main__":
 
     # load_documents()
-    query = "Was ist RAG?"
-    response = query_documents(query)
-    print("\nResponse:\n", response)
+    chat_with_rag()

@@ -29,6 +29,7 @@ Python Virtual Environments (standard names)
 /.venv
 /env
 /ENV
+.env
 
 Dependencies (if installed locally in project directory)
 
