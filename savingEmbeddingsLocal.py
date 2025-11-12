@@ -1,14 +1,13 @@
 import os
 from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
-from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.core.storage.index_store import SimpleIndexStore
 from llama_index.core.vector_stores import SimpleVectorStore
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding  
-
 from llama_index.llms.groq import Groq
+
 from dotenv import load_dotenv
 
 load_dotenv()
