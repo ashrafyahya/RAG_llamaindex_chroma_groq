@@ -14,7 +14,12 @@ load_dotenv()
 groq_api_key = os.environ.get("groq_api_key")
 
 
-
+# Set the global settings & Configure all components in one place
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+Settings.chunk_size = 512
+Settings.chunk_overlap = 50
+Settings.llm = Groq(model="llama-3.1-8b-instant", api_key=groq_api_key)
+        
 # Directory to store the index
 persist_dir = "./storage"
 
@@ -30,13 +35,6 @@ def load_or_create_index():
         index = load_index_from_storage(storage_context)
     else:
         # Create new index and save it
-        
-        # Set the global settings & Configure all components in one place
-        Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-        Settings.chunk_size = 512
-        Settings.chunk_overlap = 50
-        Settings.llm = Groq(model="llama-3.1-8b-instant", api_key=groq_api_key)
-
         documents = SimpleDirectoryReader("data").load_data()
         # Create storage context
         storage_context = StorageContext.from_defaults(
