@@ -38,7 +38,8 @@ def load_documents():
     """Load documents from the data directory"""
 
     # Load documents and store them in ChromaDB
-    documents = SimpleDirectoryReader("..\\data").load_data()
+    data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+    documents = SimpleDirectoryReader(data_path).load_data()
 
     # Check if documents already exist in ChromaDB
     existing_docs = search.collection.get(include=["documents"])["documents"]
