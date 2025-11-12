@@ -1,11 +1,26 @@
 from chroma_setup import setup_chroma
+from llama_index.core import Settings
 from chroma_search import ChromaEmbeddingSearch
 from llama_index.core import SimpleDirectoryReader
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-#Setting up ChromaDB
-client, collection = setup_chroma()
+from groq import Groq
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
+# Initialize the embedding model
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+# Initialize ChromaDB
+chroma_client, collection = setup_chroma()
 print(f"ChromaDB initialized with collection: {collection.name}")
 search = ChromaEmbeddingSearch()
+
+# Initialize Groq client
+groq_api_key = os.environ.get("groq_api_key")
+groq_client = Groq(api_key=groq_api_key)
 
 
 # Load documents and store them in ChromaDB
@@ -17,7 +32,6 @@ for doc in documents:
         metadata={"source": doc.metadata.get("file_path", "")}
     )
     
-
 
 def format_search_results(results, query: str, n_results: int = 3):
     """Format search results into a coherent answer"""
@@ -47,8 +61,25 @@ def query_documents(query: str, n_results: int = 3):
         n_results=n_results
     )
     
-    # Format the results for better readability
-    return format_search_results(results, query, n_results)
+     # Format context from documents
+    context = format_search_results(results, query)
+    
+    # Use Groq to generate answer
+    response = groq_client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that answers questions based on the provided context."
+            },
+            {
+                "role": "user",
+                "content": f"Context: {context}\n\nQuestion: {query}"
+            }
+        ],
+        model="llama-3.1-8b-instant" 
+    )
+    
+    return response.choices[0].message.content
 
 
 query = "In three sentences tell me what is RAG?"
