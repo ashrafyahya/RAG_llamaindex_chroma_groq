@@ -21,7 +21,7 @@ Settings.chunk_overlap = 50
 Settings.llm = Groq(model="llama-3.1-8b-instant", api_key=groq_api_key)
         
 # Directory to store the index
-persist_dir = "./storage"
+persist_dir = "..\\storage"
 
 def load_or_create_index():
     # Check if index already exists
@@ -35,7 +35,7 @@ def load_or_create_index():
         index = load_index_from_storage(storage_context)
     else:
         # Create new index and save it
-        documents = SimpleDirectoryReader("data").load_data()
+        documents = SimpleDirectoryReader("..\\data").load_data()
         # Create storage context
         storage_context = StorageContext.from_defaults(
             docstore=SimpleDocumentStore(),

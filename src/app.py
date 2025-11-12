@@ -1,4 +1,4 @@
-from Docs.savingEmbeddingsLocal import load_or_create_index
+from savingEmbeddingsLocal import load_or_create_index
 
 # Load or create the index
 index = load_or_create_index()
