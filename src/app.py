@@ -1,5 +1,6 @@
 from chroma_setup import setup_chroma
 from llama_index.core import Settings
+from memory import ConversationBuffer
 from chroma_search import ChromaEmbeddingSearch
 from llama_index.core import SimpleDirectoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -21,6 +22,9 @@ search = ChromaEmbeddingSearch()
 # Initialize Groq client
 groq_api_key = os.environ.get("groq_api_key")
 groq_client = Groq(api_key=groq_api_key)
+
+# Initialize conversation history
+conversation_buffer = ConversationBuffer(max_messages=10)
 
 #Load documents and store them in ChromaDB
 def load_documents():
@@ -71,8 +75,11 @@ def query_documents(query: str, n_results: int = 3):
         n_results=n_results
     )
     
-     # Format context from documents
+    # Format context from documents
     context = format_search_results(results, query)
+    
+    # Add current query to conversation history
+    conversation_buffer.add_message("user", query)
     
      # Define the structured prompt
     system_prompt = """
@@ -93,28 +100,32 @@ def query_documents(query: str, n_results: int = 3):
     - Goal: Deliver accurate, well-structured information about Agentic AI based solely on the provided context.
     """
     
+    # Prepare messages with conversation history
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *conversation_buffer.get_messages(),
+        {"role": "user", "content": f"Context: {context}\n\nQuestion: {query}"}
+    ]
+    
     # Use Groq to generate answer
     response = groq_client.chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": f"Context: {context}\n\nQuestion: {query}"
-            }
-        ],
+        messages=messages,
         model="llama-3.1-8b-instant" 
     )
     
-    return response.choices[0].message.content
+    # Extract and store the model's response
+    generated_answer  = response.choices[0].message.content
+    
+    # Store the response
+    conversation_buffer.add_message("assistant", generated_answer)
+    
+    
+    return generated_answer 
 
 
 if __name__ == "__main__":
 
-    load_documents()
+    # load_documents()
     query = "Was ist RAG?"
     response = query_documents(query)
     print("\nResponse:\n", response)
-
