@@ -1,4 +1,5 @@
 # Retrieval-Augmented Generation (RAG) system using ChromaDB, LlamaIndex and Groq
+**Status**: In progress 
 
 This project demonstrates the implementation of a Retrieval-Augmented Generation (RAG) system using ChromaDB for vector storage, LlamaIndex for document indexing, and Groq for LLM inference. The system enables efficient retrieval and generation of responses based on a collection of documents about Agentic AI.
 
