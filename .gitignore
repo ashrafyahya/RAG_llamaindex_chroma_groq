@@ -38,10 +38,16 @@ Dependencies (if installed locally in project directory)
 
 Byte-compiled / optimized files
 
+__pycache__/
 pycache/
 *.pyc
 *.pyd
 *.pyo
+
+# ChromaDB
+chroma_db/
+**/chroma_db/
+
 
 Build artifacts
 

@@ -1,0 +1,4 @@
+MODEL_NAME = "llama-3.1-8b-instant"
+TOKEN_LIMIT = 2000
+MAX_TOKENS = 2048
+
