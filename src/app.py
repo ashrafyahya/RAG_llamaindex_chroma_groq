@@ -15,23 +15,33 @@ Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 # Initialize ChromaDB
 chroma_client, collection = setup_chroma()
-print(f"ChromaDB initialized with collection: {collection.name}")
+print(f"ChromaDB initialized with collection: {collection.name}\n")
 search = ChromaEmbeddingSearch()
 
 # Initialize Groq client
 groq_api_key = os.environ.get("groq_api_key")
 groq_client = Groq(api_key=groq_api_key)
 
+#Load documents and store them in ChromaDB
+def load_documents():
+    """Load documents from the data directory"""
 
-# Load documents and store them in ChromaDB
-documents = SimpleDirectoryReader("..\\data").load_data()
-for doc in documents:
-    search.add_document(
-        text=doc.text,
-        doc_id=doc.doc_id,
-        metadata={"source": doc.metadata.get("file_path", "")}
-    )
-    
+    # Load documents and store them in ChromaDB
+    documents = SimpleDirectoryReader("..\\data").load_data()
+
+    # Check if documents already exist in ChromaDB
+    existing_docs = search.collection.get(include=["documents"])["documents"]
+    if not existing_docs:
+        # Only add documents if the collection is empty
+        for doc in documents:
+            search.add_document(
+                text=doc.text,
+                doc_id=doc.doc_id,
+                metadata={"source": doc.metadata.get("file_path", "")}
+            )
+        print("Documents added to ChromaDB\n")
+    else:
+        print("Documents already exist in ChromaDB. Skipping insertion.\n")
 
 def format_search_results(results, query: str, n_results: int = 3):
     """Format search results into a coherent answer"""
@@ -82,7 +92,10 @@ def query_documents(query: str, n_results: int = 3):
     return response.choices[0].message.content
 
 
-query = "In three sentences tell me what is RAG?"
-response = query_documents(query)
-print("response:", response)
+if __name__ == "__main__":
+
+    load_documents()
+    query = "In three sentences tell me what is RAG?"
+    response = query_documents(query)
+    print("\nResponse:\n", response)
 
