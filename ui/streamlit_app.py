@@ -12,8 +12,20 @@ from src.app import (clear_all_documents, delete_document,
 # Set page config
 st.set_page_config(page_title="RAG-based AI Assistant", page_icon="🤖")
 
-# Title
-st.title("🤖 RAG-based AI Assistant")
+# Title with clear chat button inline
+col1, col2 = st.columns([4, 1])
+with col1:
+    st.title("🤖 RAG-based AI Assistant")
+with col2:
+    # Initialize chat history in session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Button to clear chat history - only show if there are messages
+    if st.session_state.messages:
+        if st.button("🗑️ Clear Chat", help="Start a new chat by clearing all messages"):
+            st.session_state.messages = []
+            st.rerun()
 
 # Sidebar for document management
 with st.sidebar:
@@ -90,10 +102,6 @@ with st.sidebar:
 # Chat interface
 st.header("Chat with the Assistant")
 
-# Initialize chat history in session state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
 # Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -114,3 +122,6 @@ if prompt := st.chat_input("Ask a question about Agentic AI..."):
 
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
+
+    # Rerun to refresh the UI and show the clear button immediately
+    st.rerun()
