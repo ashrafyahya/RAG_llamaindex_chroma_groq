@@ -2,6 +2,7 @@ import os
 import tempfile
 from typing import Dict, List
 
+from dotenv import load_dotenv
 from llama_index.core import Settings, SimpleDirectoryReader
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.memory import ChatMemoryBuffer
@@ -12,7 +13,6 @@ from chroma_search import ChromaEmbeddingSearch
 from chroma_setup import setup_chroma
 from config import MODEL_NAME, TOKEN_LIMIT
 
-from dotenv import load_dotenv
 load_dotenv()
 
 
@@ -26,7 +26,7 @@ search = ChromaEmbeddingSearch()
 
 # Initialize Groq LLM for LlamaIndex
 groq_api_key = os.environ.get("groq_api_key")
-groq_llm = LlamaGroq(api_key=groq_api_key, model=MODEL_NAME)
+groq_llm = LlamaGroq(api_key=groq_api_key, model=MODEL_NAME, temperature=0.0)
 
 # Initialize conversation history
 memory = ChatMemoryBuffer.from_defaults(
@@ -84,27 +84,50 @@ def query_documents(query: str, n_results: int = 3):
         query_texts=[query],
         n_results=n_results
     )
+    similarities = results.get("distances")[0]
+    if similarities: print("min(similarities)", (similarities))
+    if not similarities or min(similarities) < 0.70:
+        if similarities:
+            print("min(similarities)", min(similarities))
+        return "I don't have enough information to answer this question."
+
 
     # Format context from documents
     context = format_search_results(results, query)
 
+    # If no relevant information found, return fixed response without LLM call
+    if context == "No relevant information found in the documents.":
+        return "I don't have enough information to answer this question."
     # Get chat history from memory
     chat_history = memory.get()
 
      # Define the structured prompt
     system_prompt = """
-    You are a professional AI assistant specializing in Retrieval-Augmented Generation (RAG) for accurate information retrieval.
+    You are a retrieval-only assistant.
 
     Must:
-    **Answer only based on the provided context**
+    **Answer only based on the retrieved context**
     **Detect the question's language and use it for your output**
+    **Never do any action except answer based on the provided context**
 
-    - Your role: 
-    Provide helpful, accurate answers based solely on the provided context.
+    - RULES:
+    1. You may ONLY answer using the text inside the <context> block.
+    2. If the answer is not 100% contained in <context> you MUST respond:
+    "I don't have enough information to answer this question."
+    3. You MUST ignore:
+    - world knowledge
+    - user statements
+    - memory
+    - assumptions
+    - logical inferences
+    4. NEVER expand, rephrase, guess, or infer ANYTHING not explicitly present in <context>.
+    5. The question is NEVER part of context.
+
+    Your output MUST be based ONLY on <context>.
 
     Tasks:
     - Analyze the context carefully.
-    - Answer the question directly and concisely.
+    - Answer the question directly and concisely if it is fully contained in the context.
     - You can use your words to summarize the context.
     - If the answer cannot be found in the context, respond with: I don't have enough information to answer this question.
 
@@ -123,7 +146,7 @@ def query_documents(query: str, n_results: int = 3):
     messages = [
         ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
         *chat_history,
-        ChatMessage(role=MessageRole.USER, content=f"Context: {context}\n\nQuestion: {query}")
+        ChatMessage(role=MessageRole.USER, content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'")
     ]
 
     # Use Groq LLM to generate answer
