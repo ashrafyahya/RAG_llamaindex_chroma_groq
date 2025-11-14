@@ -1,7 +1,9 @@
 import os
 import sys
+from datetime import datetime
 
 import streamlit as st
+from fpdf import FPDF
 
 # Add the src directory to the path to import modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -26,6 +28,37 @@ with col2:
         if st.button("🗑️ Clear Chat", help="Start a new chat by clearing all messages"):
             st.session_state.messages = []
             st.rerun()
+
+        # Function to generate PDF from chat history
+        def generate_chat_pdf():
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+
+            pdf.cell(200, 10, txt="Chat History", ln=True, align='C')
+            pdf.set_font("Arial", size=10)
+            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pdf.cell(200, 10, txt=f"Generated on: {current_date}", ln=True, align='C')
+            pdf.ln(10)
+
+            pdf.set_font("Arial", size=12)
+            for message in st.session_state.messages:
+                role = message["role"].capitalize()
+                content = message["content"]
+                pdf.multi_cell(0, 10, txt=f"{role}: {content}")
+                pdf.ln(5)
+
+            return pdf.output(dest='S').encode('latin-1')
+
+        # Download button for chat history as PDF
+        if st.download_button(
+            label="📄 Download",
+            data=generate_chat_pdf(),
+            file_name="chat_history.pdf",
+            mime="application/pdf",
+            help="Download the current chat history as a PDF file"
+        ):
+            pass  # Button action handled by download_button
 
 # Sidebar for document management
 with st.sidebar:
