@@ -9,7 +9,7 @@ MODAL_CSS = """
         min-width: 15% !important;
     }
     
-    [data-testid="stSidebar"] {
+    [data-testid="stSidebar"][aria-expanded="true"] {
         min-width: 15% !important;
     }
     
