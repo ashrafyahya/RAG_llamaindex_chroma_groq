@@ -8,3 +8,4 @@ fpdf
 streamlit
 openai
 google-generativeai
+cryptography

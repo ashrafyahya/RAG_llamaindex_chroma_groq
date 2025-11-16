@@ -1,45 +1,78 @@
 """
 Local storage utilities for persisting API keys and user preferences
+Uses encryption for secure storage and retrieval of API keys
 """
 
-import hashlib
+import base64
 import json
 import os
 from pathlib import Path
 
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 
 class LocalStorage:
-    """Handle persistent storage of API keys and settings with hashing"""
+    """Handle persistent storage of API keys and settings with encryption"""
     
     def __init__(self):
         # Create a .streamlit_cache directory in the project root for storing sensitive data
         self.storage_dir = Path.home() / ".streamlit_cache" / "agentic_ai"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.storage_file = self.storage_dir / "api_keys.json"
-        # Use machine's username as part of the salt for additional security
-        self.salt = os.getenv("USERNAME", "user")
+        # Use machine's username as part of the encryption key derivation
+        self.salt = os.getenv("USERNAME", "user").encode('utf-8')
+        self._cipher = self._get_cipher()
     
-    @staticmethod
-    def _hash_api_key(api_key: str, salt: str) -> str:
-        """Hash an API key using SHA256 with salt"""
+    def _get_cipher(self) -> Fernet:
+        """Generate a Fernet cipher using PBKDF2 key derivation"""
+        # Derive a key from the username using PBKDF2HMAC
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=self.salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(self.salt))
+        return Fernet(key)
+    
+    def _encrypt_api_key(self, api_key: str) -> str:
+        """Encrypt an API key using Fernet encryption"""
         if not api_key or not api_key.strip():
             return ""
-        # Combine salt + api_key for hashing
-        to_hash = f"{salt}{api_key}".encode('utf-8')
-        return hashlib.sha256(to_hash).hexdigest()
+        encrypted = self._cipher.encrypt(api_key.encode('utf-8'))
+        return encrypted.decode('utf-8')
+    
+    def _decrypt_api_key(self, encrypted_key: str) -> str:
+        """Decrypt an API key using Fernet encryption"""
+        if not encrypted_key or not encrypted_key.strip():
+            return ""
+        try:
+            decrypted = self._cipher.decrypt(encrypted_key.encode('utf-8'))
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            print(f"Error decrypting API key: {e}")
+            return ""
     
     def load_api_keys(self):
-        """Load API keys from local storage - returns hashed keys"""
+        """Load API keys from local storage - decrypts them"""
         if self.storage_file.exists():
             try:
                 with open(self.storage_file, 'r') as f:
                     data = json.load(f)
-                    return data.get("api_keys", {
+                    encrypted_keys = data.get("api_keys", {
                         "groq": "",
                         "openai": "",
                         "gemini": "",
                         "deepseek": ""
                     })
+                    # Decrypt all keys
+                    return {
+                        provider: self._decrypt_api_key(key)
+                        for provider, key in encrypted_keys.items()
+                    }
             except (json.JSONDecodeError, IOError):
                 return {
                     "groq": "",
@@ -55,28 +88,20 @@ class LocalStorage:
         }
     
     def save_api_keys(self, api_keys: dict):
-        """Save API keys to local storage - hashes them first"""
+        """Save API keys to local storage - encrypts them first"""
         try:
-            # Hash all API keys before saving
-            hashed_keys = {
-                provider: self._hash_api_key(key, self.salt)
+            # Encrypt all API keys before saving
+            encrypted_keys = {
+                provider: self._encrypt_api_key(key)
                 for provider, key in api_keys.items()
             }
-            data = {"api_keys": hashed_keys}
+            data = {"api_keys": encrypted_keys}
             with open(self.storage_file, 'w') as f:
                 json.dump(data, f, indent=2)
             return True
         except IOError as e:
             print(f"Error saving API keys: {e}")
             return False
-    
-    def verify_api_key(self, provider: str, api_key: str) -> bool:
-        """Verify if a provided API key matches the stored hashed version"""
-        stored_hash = self.load_api_keys().get(provider, "")
-        if not stored_hash:
-            return False
-        provided_hash = self._hash_api_key(api_key, self.salt)
-        return provided_hash == stored_hash
     
     def load_selected_provider(self):
         """Load the last selected provider"""
