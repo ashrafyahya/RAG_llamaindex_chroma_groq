@@ -1,6 +1,6 @@
 import os
 import tempfile
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from llama_index.core import Settings, SimpleDirectoryReader
@@ -9,6 +9,7 @@ from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.groq import Groq as LlamaGroq
 
+from api_keys import APIKeyManager
 from chroma_search import ChromaEmbeddingSearch
 from chroma_setup import setup_chroma
 from config import MODEL_NAME, TOKEN_LIMIT
@@ -24,14 +25,10 @@ chroma_client, collection = setup_chroma()
 print(f"ChromaDB initialized with collection: {collection.name}\n")
 search = ChromaEmbeddingSearch()
 
-# Initialize Groq LLM for LlamaIndex
-groq_api_key = os.environ.get("groq_api_key")
-groq_llm = LlamaGroq(api_key=groq_api_key, model=MODEL_NAME, temperature=0.0)
-
-# Initialize conversation history
+# Initialize conversation history - will be set per request with user's API key
 memory = ChatMemoryBuffer.from_defaults(
     token_limit=TOKEN_LIMIT,
-    llm=groq_llm,
+    llm=None,  # Will be set dynamically with user's API key
 )
 
 
@@ -77,7 +74,15 @@ def format_search_results(results, query: str, n_results: int = 3):
     return formatted_answer
 
 # Query the database
-def query_documents(query: str, n_results: int = 3):
+def query_documents(
+    query: str,
+    n_results: int = 3,
+    api_provider: str = "groq",
+    api_key_groq: Optional[str] = None,
+    api_key_openai: Optional[str] = None,
+    api_key_gemini: Optional[str] = None,
+    api_key_deepseek: Optional[str] = None
+):
     """Query ChromaDB and format the results"""
     # Get relevant documents
     results = search.collection.query(
@@ -142,6 +147,117 @@ def query_documents(query: str, n_results: int = 3):
     Answer: your output.
     """
 
+    # Get API key based on selected provider
+    if api_provider == "groq":
+        api_key = APIKeyManager.get_groq_key(api_key_groq)
+        if not api_key:
+            return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
+        llm = LlamaGroq(api_key=api_key, model=MODEL_NAME, temperature=0.0)
+    elif api_provider == "openai":
+        api_key = APIKeyManager.get_openai_key(api_key_openai)
+        if not api_key:
+            return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
+        
+        try:
+            from openai import OpenAI
+
+            # Use OpenAI client
+            client = OpenAI(api_key=api_key)
+            
+            # Build messages for OpenAI
+            system_message = f"You are a helpful assistant. Use the following context to answer the user's question:\n\nContext:\n{context}"
+            messages_openai = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": query}
+            ]
+            
+            # Get response from OpenAI
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages_openai,
+                temperature=0.0
+            )
+            
+            # Store the interaction in memory
+            memory.put(ChatMessage(role=MessageRole.USER, content=query))
+            memory.put(ChatMessage(role=MessageRole.ASSISTANT, content=response.choices[0].message.content))
+            
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"Error: Failed to get response from OpenAI: {str(e)}"
+    elif api_provider == "gemini":
+        api_key = APIKeyManager.get_gemini_key(api_key_gemini)
+        if not api_key:
+            return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
+        
+        try:
+            import google.generativeai as genai
+
+            # Configure Gemini with API key
+            genai.configure(api_key=api_key)
+            
+            # Use Gemini model
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Build prompt for Gemini
+            prompt = f"""You are a helpful assistant. Use the following context to answer the user's question.
+
+Context:
+{context}
+
+Question: {query}
+
+Remember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"""
+            
+            # Get response from Gemini
+            response = model.generate_content(prompt)
+            answer = response.text
+            
+            # Store the interaction in memory
+            memory.put(ChatMessage(role=MessageRole.USER, content=query))
+            memory.put(ChatMessage(role=MessageRole.ASSISTANT, content=answer))
+            
+            return answer
+        except Exception as e:
+            return f"Error: Failed to get response from Gemini: {str(e)}"
+    elif api_provider == "deepseek":
+        api_key = APIKeyManager.get_deepseek_key(api_key_deepseek)
+        if not api_key:
+            return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
+        
+        try:
+            from openai import OpenAI
+
+            # Deepseek uses OpenAI-compatible API
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com"
+            )
+            
+            # Build messages for Deepseek
+            system_message = f"You are a helpful assistant. Use the following context to answer the user's question:\n\nContext:\n{context}"
+            messages_deepseek = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": query}
+            ]
+            
+            # Get response from Deepseek
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=messages_deepseek,
+                temperature=0.0
+            )
+            
+            # Store the interaction in memory
+            memory.put(ChatMessage(role=MessageRole.USER, content=query))
+            memory.put(ChatMessage(role=MessageRole.ASSISTANT, content=response.choices[0].message.content))
+            
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"Error: Failed to get response from Deepseek: {str(e)}"
+    else:
+        return f"Error: Unknown API provider '{api_provider}'. Please select a valid provider."
+
     # Prepare messages with conversation history
     messages = [
         ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
@@ -149,8 +265,8 @@ def query_documents(query: str, n_results: int = 3):
         ChatMessage(role=MessageRole.USER, content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'")
     ]
 
-    # Use Groq LLM to generate answer
-    response = groq_llm.chat(messages)
+    # Use LLM to generate answer
+    response = llm.chat(messages)
 
     # Extract and store the model's response
     generated_answer = response.message.content

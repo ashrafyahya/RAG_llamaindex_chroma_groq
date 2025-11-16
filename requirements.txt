@@ -6,3 +6,5 @@ groq
 python-dotenv
 fpdf
 streamlit
+openai
+google-generativeai
