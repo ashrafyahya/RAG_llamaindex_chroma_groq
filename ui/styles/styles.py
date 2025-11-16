@@ -245,6 +245,7 @@ MODAL_CSS = """
         font-size: 1.05rem;
         letter-spacing: 0.015em;
         font-weight: 400;
+        font-family: 'Times New Roman', Times, serif; /* Formal German-style font */
     }
     
     .message-content p {
