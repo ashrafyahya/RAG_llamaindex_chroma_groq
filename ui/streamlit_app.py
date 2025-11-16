@@ -19,8 +19,12 @@ from ui.components.document_management import show_document_management_sidebar
 from ui.local_storage import get_storage
 from ui.styles.styles import apply_styles
 
-# Set page config
-st.set_page_config(page_title="RAG-based AI Assistant", page_icon="🤖")
+# Set page config with wide layout
+st.set_page_config(
+    page_title="RAG-based AI Assistant", 
+    page_icon="🤖",
+    layout="centered"
+)
 
 # Initialize storage
 storage = get_storage()
