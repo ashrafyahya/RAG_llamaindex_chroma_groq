@@ -32,16 +32,17 @@ apply_styles()
 initialize_api_settings_state()
 initialize_chat_state()
 
+# Render document management in sidebar
+show_document_management_sidebar()
+    
 # Show API Settings Modal if toggled
 if st.session_state.show_api_modal:
     show_api_settings_modal()
+else:
 
-# Render document management in sidebar
-show_document_management_sidebar()
+    # Render chat header
+    show_chat_header()
 
-# Render chat header
-show_chat_header()
-
-# Render chat interface
-show_chat_interface()
+    # Render chat interface
+    show_chat_interface()
 

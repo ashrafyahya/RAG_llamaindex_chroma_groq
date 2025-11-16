@@ -4,6 +4,15 @@ Streamlit CSS and styling configuration
 
 MODAL_CSS = """
 <style>
+    /* Set minimum width of sidebar to 15% */
+    .css-1d391kg {
+        min-width: 15% !important;
+    }
+    
+    [data-testid="stSidebar"] {
+        min-width: 15% !important;
+    }
+    
     [data-testid="stModal"] {
         z-index: 999 !important;
     }
@@ -49,6 +58,11 @@ MODAL_CSS = """
     h3 {
         margin: 0 !important;
         padding: 0 !important;
+    }
+
+    /* Hide link icons beside headers */
+    h1 a, h2 a, h3 a {
+        display: none !important;
     }
     
     .api-key-container {
