@@ -1,5 +1,5 @@
 MODEL_NAME = "llama-3.1-8b-instant"
-TOKEN_LIMIT = 6000
+TOKEN_LIMIT = 8000
 MAX_TOKENS = 2048
 
 # Memory management settings

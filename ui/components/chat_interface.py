@@ -16,22 +16,22 @@ def markdown_to_html(text):
     """Convert basic markdown to HTML"""
     # Escape HTML first
     text = html.escape(text)
-    
+
     # Convert markdown patterns to HTML
     # Bold: **text** or __text__
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     text = re.sub(r'__(.+?)__', r'<strong>\1</strong>', text)
-    
+
     # Italic: *text* or _text_
     text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em>\1</em>', text)
     text = re.sub(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)', r'<em>\1</em>', text)
-    
+
     # Code: `text`
     text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
-    
+
     # Line breaks
     text = text.replace('\n', '<br>')
-    
+
     return text
 
 
@@ -39,6 +39,10 @@ def initialize_chat_state():
     """Initialize chat session state"""
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "is_thinking" not in st.session_state:
+        st.session_state.is_thinking = False
+    if "user_input" not in st.session_state:
+        st.session_state.user_input = None
 
 
 def generate_chat_pdf():
@@ -119,7 +123,7 @@ def show_chat_interface():
     }
     </script>
     """, unsafe_allow_html=True)
-    
+
     if not st.session_state.show_api_modal:
         if not st.session_state.messages:
             st.header("Chat with the Assistant")
@@ -131,11 +135,11 @@ def show_chat_interface():
             for idx, message in enumerate(st.session_state.messages):
                 role = message["role"]
                 content = message["content"]
-                
+
                 # Get timestamp if available, otherwise use current time
                 timestamp = message.get("timestamp", datetime.now().strftime("%H:%M"))
                 message_id = f"msg_{idx}"
-                
+
                 # Determine alignment: user = right, assistant = left
                 if role == "user":
                     # User message on the right - plain text with human icon outside on the right
@@ -185,11 +189,29 @@ def show_chat_interface():
                         """,
                         unsafe_allow_html=True
                     )
-        
+
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Chat input (stays fixed at bottom)
-        if prompt := st.chat_input("Type your message here..."):
+        # Chat input 
+        # Check if model is thinking before rendering input
+        if st.session_state.is_thinking:
+            # Show disabled input when model is thinking
+            st.chat_input("Model is responding...", disabled=True)
+        else:
+            # Only enable input when model is not thinking
+            prompt = st.chat_input("Type your message here...")
+            if prompt:
+                # Set thinking state to True immediately after user sends message
+                st.session_state.is_thinking = True
+                st.session_state.user_input = prompt  # Store the input
+                st.rerun()  # Rerun to update the UI immediately
+
+        # Check if there's stored user input to process
+        if st.session_state.user_input:
+            # Retrieve and clear the stored input
+            prompt = st.session_state.user_input
+            st.session_state.user_input = None
+
             # Debug output for every user message
             print(f"[CHAT_DEBUG] User sent message: '{prompt}' (length: {len(prompt)} chars)")
 
@@ -199,7 +221,7 @@ def show_chat_interface():
                 "content": prompt,
                 "timestamp": current_time
             })
-            
+
             # Display user message immediately
             escaped_prompt = html.escape(prompt).replace('\n', '<br>')
             user_msg_id = f"msg_user_{len(st.session_state.messages)}"
@@ -234,15 +256,16 @@ def show_chat_interface():
                     api_key_gemini=st.session_state.api_keys["gemini"],
                     api_key_deepseek=st.session_state.api_keys["deepseek"]
                 )
-                
+
                 # Check if the response indicates an error
                 if response.startswith("Your question is too long"):
                     st.error(response)
                     # Remove the user message from the history since it wasn't processed
                     st.session_state.messages.pop()
+                    st.session_state.is_thinking = False  # Reset thinking state
                     st.rerun()
                     return
-            
+
             # Display assistant response with markdown rendering
             response_time = datetime.now().strftime("%H:%M")
             html_response = markdown_to_html(response)
@@ -270,11 +293,14 @@ def show_chat_interface():
 
             # Add assistant response to chat history
             st.session_state.messages.append({
-                "role": "assistant", 
+                "role": "assistant",
                 "content": response,
                 "timestamp": response_time
             })
-            
+
+            # Reset thinking state to False
+            st.session_state.is_thinking = False
+
             # Auto-scroll to bottom
             st.markdown("""
             <script>
