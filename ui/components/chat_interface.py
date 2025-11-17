@@ -9,7 +9,7 @@ from datetime import datetime
 import streamlit as st
 from fpdf import FPDF
 
-from src.app import query_documents
+from src.app import clear_chat_memory, query_documents
 
 
 def markdown_to_html(text):
@@ -75,6 +75,7 @@ def show_chat_header():
         if st.session_state.messages and not st.session_state.show_api_modal:
             if st.button("🗑️ Clear Chat", help="Start a new chat by clearing all messages"):
                 st.session_state.messages = []
+                clear_chat_memory()
                 st.rerun()
 
             if st.download_button(
@@ -189,9 +190,12 @@ def show_chat_interface():
 
         # Chat input (stays fixed at bottom)
         if prompt := st.chat_input("Type your message here..."):
+            # Debug output for every user message
+            print(f"[CHAT_DEBUG] User sent message: '{prompt}' (length: {len(prompt)} chars)")
+
             current_time = datetime.now().strftime("%H:%M")
             st.session_state.messages.append({
-                "role": "user", 
+                "role": "user",
                 "content": prompt,
                 "timestamp": current_time
             })
@@ -230,6 +234,14 @@ def show_chat_interface():
                     api_key_gemini=st.session_state.api_keys["gemini"],
                     api_key_deepseek=st.session_state.api_keys["deepseek"]
                 )
+                
+                # Check if the response indicates an error
+                if response.startswith("Your question is too long"):
+                    st.error(response)
+                    # Remove the user message from the history since it wasn't processed
+                    st.session_state.messages.pop()
+                    st.rerun()
+                    return
             
             # Display assistant response with markdown rendering
             response_time = datetime.now().strftime("%H:%M")

@@ -137,7 +137,7 @@ MODAL_CSS = """
         display: flex;
         align-items: flex-start;
         gap: 1rem;
-        padding: 1.5rem 0.75rem;
+        padding: 1.5rem 1.0rem;
         word-wrap: break-word;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
