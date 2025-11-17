@@ -148,7 +148,7 @@ class MemoryManager:
         messages.append(
             ChatMessage(
                 role=MessageRole.USER,
-                content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
+                content=f"Context:\n{context}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
             )
         )
 

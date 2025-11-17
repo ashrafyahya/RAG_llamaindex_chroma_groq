@@ -62,8 +62,7 @@ class RAGSystem:
         documents = results['documents'][0]
         metadatas = results['metadatas'][0]
         
-        formatted_answer = f"\n\nBased on your question: '{query}'\n\n"
-        formatted_answer += "Here are the relevant findings:\n\n"
+        formatted_answer = "Relevant findings:\n\n"
         
         for i, (doc, meta) in enumerate(zip(documents, metadatas)):
             formatted_answer += f"Source {i+1}: {meta['source']}\n"
