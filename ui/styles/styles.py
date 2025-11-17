@@ -149,16 +149,16 @@ MODAL_CSS = """
     
     /* User message bubble - stronger visual hierarchy */
     .user-bubble {
-        # background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.2) 100%);
+        background: rgba(74, 85, 104, 0.1);
         border: 1px solid rgba(239, 68, 68, 0.5);
         border-radius: 20px 20px 6px 20px;
         flex-direction: row;
         width: 80%;
         min-width: 80%;
         max-width: 80%;
-        # box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15), 
-        #             0 2px 6px rgba(239, 68, 68, 0.1),
-        #             inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        box-shadow: 0 4px 12px rgba(74, 85, 104, 0.15),
+                    0 2px 6px rgba(74, 85, 104, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     
     .user-bubble:hover {
@@ -170,16 +170,16 @@ MODAL_CSS = """
     
     /* Assistant message bubble - distinct from user */
     .assistant-bubble {
-        # background: linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(249, 115, 22, 0.2) 100%);
+        background: rgba(45, 55, 72, 0.1);
         border: 1px solid rgba(251, 146, 60, 0.5);
         border-radius: 20px 20px 20px 6px;
         flex-direction: row;
         width: 80%;
         min-width: 80%;
         max-width: 80%;
-        # box-shadow: 0 4px 12px rgba(251, 146, 60, 0.15), 
-        #             0 2px 6px rgba(251, 146, 60, 0.1),
-        #             inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        box-shadow: 0 4px 12px rgba(45, 55, 72, 0.15),
+                    0 2px 6px rgba(45, 55, 72, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     
     .assistant-bubble:hover {
