@@ -3,23 +3,13 @@
 Memory Manager Module
 Handles advanced memory management with token counting, summarization, and context management
 """
-from typing import List, Dict, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
-try:
-    import tiktoken
-except ImportError:
-    print("Warning: tiktoken not installed. Please install it with: pip install tiktoken")
-    # Create a fallback tokenizer
-    class TikTokenFallback:
-        def get_encoding(self, name):
-            return self
-        def encode(self, text):
-            # Simple fallback: count characters and divide by 4 (rough estimate)
-            return [0] * (len(text) // 4)
-    tiktoken = TikTokenFallback()
-
+import tiktoken
 from llama_index.core.llms import ChatMessage, MessageRole
-from src.config import TOKEN_LIMIT, RECENT_MESSAGES_LIMIT, SUMMARIZE_THRESHOLD, QUESTION_THRESHOLD
+
+from src.config import (QUESTION_THRESHOLD, RECENT_MESSAGES_LIMIT,
+                        SUMMARIZE_THRESHOLD, TOKEN_LIMIT)
 
 
 class MemoryManager:
@@ -99,8 +89,8 @@ class MemoryManager:
         return "\n".join(formatted)
 
     def prepare_context(
-        self, 
-        query: str, 
+        self,
+        query: str,
         system_prompt: str,
         context: str
     ) -> Tuple[List[ChatMessage], Optional[str]]:
@@ -111,36 +101,23 @@ class MemoryManager:
             Tuple of (messages, error_message)
             If error_message is not None, the query should not proceed
         """
+
         # Calculate token usage
         query_tokens = self.count_tokens(query)
         system_tokens = self.count_tokens(system_prompt)
         context_tokens = self.count_tokens(context)
-        
-        # Log the token breakdown
-        print(f"[CHAT_DEBUG] Token breakdown - Query: {query_tokens}, System: {system_tokens}, Context: {context_tokens}")
+
+        # Debug output for testing
+        print(f"[MEMORY_DEBUG] Query tokens: {query_tokens}")
+        print(f"[MEMORY_DEBUG] System tokens: {system_tokens}")
+        print(f"[MEMORY_DEBUG] Context tokens: {context_tokens}")
+        print(f"[MEMORY_DEBUG] Chat history length: {len(self.chat_history)} messages")
+        history_tokens = self.get_chat_history_token_count()
+        print(f"[MEMORY_DEBUG] Chat history total tokens: {history_tokens}")
 
         # Check if the query itself is too long (>20% of token limit)
         if query_tokens > self.token_limit * self.question_threshold:
             return [], "Your question is too long. Please ask a shorter question."
-
-        # Calculate remaining tokens for chat history
-        remaining_tokens = self.token_limit - query_tokens - system_tokens - context_tokens
-
-        # Check if we've exceeded 70% of token limit with just system prompt, query, and context
-        total_without_history = query_tokens + system_tokens + context_tokens
-        if total_without_history > self.token_limit * self.summarize_threshold:
-            # We need to summarize older messages (4 to end) if they exist
-            if len(self.chat_history) > 3:
-                older_messages = self.get_older_messages(3, len(self.chat_history))  # Messages 4 to end
-                if older_messages:
-                    summary = self.summarize_messages(older_messages)
-                    summary_tokens = self.count_tokens(summary)
-
-                    # If summary is too long, we might need to further summarize or truncate
-                    if summary_tokens > remaining_tokens * 0.5:  # Use at most 50% of remaining tokens
-                        # Truncate the summary
-                        summary = summary[:int(remaining_tokens * 0.5 * 0.75)]  # Rough estimate
-                        summary += "\n[Summary truncated due to length]"
 
         # Prepare the messages for the LLM
         messages = [
@@ -151,16 +128,12 @@ class MemoryManager:
         if len(self.chat_history) > 0:
             # Get recent messages (up to 3)
             recent_messages = self.get_recent_messages(self.recent_messages_limit)
-            recent_tokens = sum(self.count_tokens(msg.content) for msg in recent_messages)
-            print(f"[CHAT_DEBUG] Recent messages tokens: {recent_tokens}")
 
-            # Add older messages summary if available
+            # Add older messages summary if available and we have enough messages
             if len(self.chat_history) > self.recent_messages_limit:
-                older_messages = self.get_older_messages(3, len(self.chat_history))  # Messages 4 to end
+                older_messages = self.get_older_messages(3, 15)  # Messages 4-15
                 if older_messages:
                     summary = self.summarize_messages(older_messages)
-                    summary_tokens = self.count_tokens(summary)
-                    print(f"[CHAT_DEBUG] Summary tokens: {summary_tokens}")
                     messages.append(
                         ChatMessage(
                             role=MessageRole.SYSTEM,
@@ -172,41 +145,47 @@ class MemoryManager:
             messages.extend(recent_messages)
 
         # Add current query with context
-        query_with_context = f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
-        query_context_tokens = self.count_tokens(query_with_context)
-        print(f"[CHAT_DEBUG] Query with context tokens: {query_context_tokens}")
-        messages.append(ChatMessage(role=MessageRole.USER, content=query_with_context))
+        messages.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
+            )
+        )
 
         # Check total token count
         total_tokens = 0
         for msg in messages:
             total_tokens += self.count_tokens(msg.content)
-            
-        # If we're over the token limit, try to reduce the size of the messages
-        if total_tokens > self.token_limit:
-            # Calculate how much we need to reduce
-            excess = total_tokens - self.token_limit
-            
-            # Try to reduce the summary first if it exists
-            for i, msg in enumerate(messages):
-                if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
-                    # Reduce the summary by removing some content
-                    content = msg.content
-                    # Remove roughly 75% of the estimated excess tokens
-                    reduced_content = content[:-(excess * 3)]
-                    reduced_content += "\n[Summary truncated due to length]"
-                    messages[i] = ChatMessage(role=MessageRole.SYSTEM, content=reduced_content)
-                    break
-            
-            # Recalculate total tokens
-            total_tokens = 0
-            for msg in messages:
-                total_tokens += self.count_tokens(msg.content)
 
-        # If we're still over the token limit, we need to summarize more messages
+        # If over token limit, try to reduce context or summarize more aggressively
         if total_tokens > self.token_limit:
-            # If we still have messages beyond the first 15, summarize them as well
-            if len(self.chat_history) > 15:
+            # For small histories (<10 messages), allow some flexibility
+            if len(self.chat_history) < 10:
+                # Try truncating context to fit
+                max_context_tokens = self.token_limit - (total_tokens - context_tokens) - 100  # Leave some buffer
+                if max_context_tokens > 100:  # Minimum useful context
+                    truncated_context = context
+                    while self.count_tokens(truncated_context) > max_context_tokens and len(truncated_context) > 100:
+                        # Truncate by removing the last 10% of content
+                        truncate_point = int(len(truncated_context) * 0.9)
+                        truncated_context = truncated_context[:truncate_point] + "\n[Context truncated due to length]"
+
+                    # Update the user message with truncated context
+                    for i, msg in enumerate(messages):
+                        if msg.role == MessageRole.USER:
+                            messages[i] = ChatMessage(
+                                role=MessageRole.USER,
+                                content=f"Context:\n{truncated_context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
+                            )
+                            break
+
+                    # Recalculate total tokens
+                    total_tokens = 0
+                    for msg in messages:
+                        total_tokens += self.count_tokens(msg.content)
+
+            # If still over limit and we have messages beyond 15, summarize them
+            if total_tokens > self.token_limit and len(self.chat_history) > 15:
                 # Get messages beyond the first 15
                 very_old_messages = self.get_older_messages(15, len(self.chat_history))
                 if very_old_messages:
@@ -224,37 +203,60 @@ class MemoryManager:
                     total_tokens = 0
                     for msg in messages:
                         total_tokens += self.count_tokens(msg.content)
-                    
-                    # If still over the limit, try to reduce the summary size
-                    if total_tokens > self.token_limit:
-                        # Find the summary message and truncate it
+
+            # Final check: if still over limit, summarize more aggressively instead of error
+            if total_tokens > self.token_limit:
+                # For any history size, try to summarize everything beyond recent messages
+                if len(self.chat_history) > self.recent_messages_limit:
+                    # Summarize all messages beyond the recent ones (4 to end)
+                    all_older_messages = self.get_older_messages(self.recent_messages_limit, len(self.chat_history))
+                    if all_older_messages:
+                        summary = self.summarize_messages(all_older_messages)
+                        # Replace any existing summary or add new one
+                        summary_found = False
                         for i, msg in enumerate(messages):
                             if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
-                                # Truncate the summary
-                                content = msg.content
-                                # Estimate how much to remove
-                                excess = total_tokens - self.token_limit
-                                # Remove roughly 75% of the estimated excess tokens
-                                truncated_content = content[:-(excess * 3)]
-                                truncated_content += "\n[Summary truncated due to length]"
-                                messages[i] = ChatMessage(role=MessageRole.SYSTEM, content=truncated_content)
+                                messages[i] = ChatMessage(
+                                    role=MessageRole.SYSTEM,
+                                    content=f"Previous conversation summary:\n{summary}"
+                                )
+                                summary_found = True
                                 break
-                        
-                        # Recalculate total tokens again
+                        if not summary_found:
+                            # Insert summary after system prompt
+                            messages.insert(1, ChatMessage(
+                                role=MessageRole.SYSTEM,
+                                content=f"Previous conversation summary:\n{summary}"
+                            ))
+
+                        # Recalculate total tokens
                         total_tokens = 0
                         for msg in messages:
                             total_tokens += self.count_tokens(msg.content)
-                        
-                        # If still over the limit, return error
-                        if total_tokens > self.token_limit:
-                            return [], "Conversation history is too long. Please start a new conversation."
 
-        # Log the total token count
-        total_tokens = 0
-        for msg in messages:
-            total_tokens += self.count_tokens(msg.content)
-        print(f"[CHAT_DEBUG] Total tokens sent to model: {total_tokens}")
-        
+                        # If still over limit, truncate the summary
+                        if total_tokens > self.token_limit:
+                            excess = total_tokens - self.token_limit
+                            for i, msg in enumerate(messages):
+                                if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
+                                    content = msg.content
+                                    # Truncate summary to fit
+                                    max_summary_tokens = self.count_tokens(content) - excess - 50  # Buffer
+                                    if max_summary_tokens > 100:
+                                        truncated_summary = content
+                                        while self.count_tokens(truncated_summary) > max_summary_tokens and len(truncated_summary) > 200:
+                                            truncate_point = int(len(truncated_summary) * 0.9)
+                                            truncated_summary = truncated_summary[:truncate_point] + "\n[Summary truncated due to length]"
+                                        messages[i] = ChatMessage(
+                                            role=MessageRole.SYSTEM,
+                                            content=truncated_summary
+                                        )
+                                    break
+
+        # Final debug output showing total tokens sent to model
+        final_total_tokens = sum(self.count_tokens(msg.content) for msg in messages)
+        print(f"[MEMORY_DEBUG] Final total tokens sent to model: {final_total_tokens}")
+
         return messages, None
 
     def add_exchange(self, query: str, response: str) -> None:
