@@ -61,6 +61,18 @@ def generate_chat_pdf():
     for message in st.session_state.messages:
         role = message["role"].capitalize()
         content = message["content"]
+
+        # Replace problematic Unicode characters with ASCII equivalents
+        # This handles common special characters that cause issues with latin-1 encoding
+        content = content.replace('\u2013', '-').replace('\u2014', '--')  # en and em dashes
+        content = content.replace('\u2019', "'").replace('\u2018', "'")  # smart quotes
+        content = content.replace('\u201c', '"').replace('\u201d', '"')  # smart double quotes
+        content = content.replace('\u2026', '...')  # ellipsis
+        content = content.replace('\u00A9', '(c)').replace('\u00AE', '(R)')  # copyright and registered
+
+        # If any non-ASCII characters remain, replace them with ?
+        content = ''.join(c if ord(c) < 256 else '?' for c in content)
+
         pdf.multi_cell(0, 10, txt=f"{role}: {content}")
         pdf.ln(5)
 
