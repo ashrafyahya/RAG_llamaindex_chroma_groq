@@ -131,15 +131,15 @@ def show_chat_interface():
                     escaped_content = html.escape(content).replace('\n', '<br>')
                     button_id = f"copy_btn_{message_id}"
                     copy_text_id = f"copy_text_{message_id}"
-                    # Escape content for hidden textarea
-                    data_content = html.escape(content)
+                    # Textarea content should be raw (not HTML-escaped) but we need to escape the closing tag
+                    textarea_content = content.replace('</textarea>', '&lt;/textarea&gt;')
                     st.markdown(
                         f"""
                         <div class="chat-message user-message" id="{message_id}">
                             <div class="message-bubble user-bubble">
                                 <div class="message-content-wrapper">
                                     <div class="message-content">{escaped_content}</div>
-                                    <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_content}</textarea>
+                                    <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{textarea_content}</textarea>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
                                         <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
@@ -158,8 +158,8 @@ def show_chat_interface():
                     html_content = markdown_to_html(content)
                     button_id = f"copy_btn_{message_id}"
                     copy_text_id = f"copy_text_{message_id}"
-                    # Escape content for hidden textarea
-                    data_content = html.escape(content)
+                    # Textarea content should be raw (not HTML-escaped) but we need to escape the closing tag
+                    textarea_content = content.replace('</textarea>', '&lt;/textarea&gt;')
                     st.markdown(
                         f"""
                         <div class="chat-message assistant-message" id="{message_id}">
@@ -167,7 +167,7 @@ def show_chat_interface():
                             <div class="message-bubble assistant-bubble">
                                 <div class="message-content-wrapper">
                                     <div class="message-content">{html_content}</div>
-                                    <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_content}</textarea>
+                                    <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{textarea_content}</textarea>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
                                         <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
@@ -301,14 +301,15 @@ def show_chat_interface():
             user_msg_id = f"msg_user_{len(st.session_state.messages)}"
             button_id = f"copy_btn_{user_msg_id}"
             copy_text_id = f"copy_text_{user_msg_id}"
-            data_prompt = html.escape(prompt)
+            # Textarea content should be raw (not HTML-escaped) but we need to escape the closing tag
+            textarea_prompt = prompt.replace('</textarea>', '&lt;/textarea&gt;')
             st.markdown(
                 f"""
                 <div class="chat-message user-message" id="{user_msg_id}">
                     <div class="message-bubble user-bubble">
                         <div class="message-content-wrapper">
                             <div class="message-content">{escaped_prompt}</div>
-                            <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_prompt}</textarea>
+                            <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{textarea_prompt}</textarea>
                             <div class="message-footer">
                                 <span class="message-timestamp">{current_time}</span>
                                 <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
@@ -349,7 +350,8 @@ def show_chat_interface():
             assistant_msg_id = f"msg_assistant_{len(st.session_state.messages) + 1}"
             button_id = f"copy_btn_{assistant_msg_id}"
             copy_text_id = f"copy_text_{assistant_msg_id}"
-            data_response = html.escape(response)
+            # Textarea content should be raw (not HTML-escaped) but we need to escape the closing tag
+            textarea_response = response.replace('</textarea>', '&lt;/textarea&gt;')
             st.markdown(
                 f"""
                 <div class="chat-message assistant-message" id="{assistant_msg_id}">
@@ -357,7 +359,7 @@ def show_chat_interface():
                     <div class="message-bubble assistant-bubble">
                         <div class="message-content-wrapper">
                             <div class="message-content">{html_response}</div>
-                            <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_response}</textarea>
+                            <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{textarea_response}</textarea>
                             <div class="message-footer">
                                 <span class="message-timestamp">{response_time}</span>
                                 <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
