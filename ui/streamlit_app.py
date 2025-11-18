@@ -18,6 +18,7 @@ from ui.components.chat_interface import (initialize_chat_state,
 from ui.components.document_management import show_document_management_sidebar
 from ui.local_storage import get_storage
 from ui.styles.styles import apply_styles
+from src.app import clear_chat_memory
 
 # Set page config with wide layout
 st.set_page_config(
@@ -35,6 +36,15 @@ apply_styles()
 # Initialize all session states
 initialize_api_settings_state()
 initialize_chat_state()
+
+# Check for clear_chat query parameter
+query_params = st.query_params
+if query_params.get("clear_chat") == "true":
+    st.session_state.messages = []
+    clear_chat_memory()
+    # Clear the query parameter
+    st.query_params.clear()
+    st.rerun()
 
 # Render document management in sidebar
 show_document_management_sidebar()
