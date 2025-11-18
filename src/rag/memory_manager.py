@@ -3,8 +3,7 @@
 Memory Manager Module
 Handles advanced memory management with token counting, summarization, and context management
 """
-from typing import Dict, List, Optional, Tuple
-
+from typing import List, Optional, Tuple
 import tiktoken
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.llms.groq import Groq as LlamaGroq

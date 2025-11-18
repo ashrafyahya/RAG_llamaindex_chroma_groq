@@ -3,7 +3,6 @@ Document Management Component
 Handles file uploads, deletion, and document listing
 """
 import streamlit as st
-
 from src.app import (clear_all_documents, delete_document,
                      get_uploaded_documents, upload_document)
 

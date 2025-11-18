@@ -3,7 +3,6 @@ Chroma Database Setup Module
 Provides utilities for initializing and configuring ChromaDB persistent storage
 """
 import os
-
 import chromadb
 
 

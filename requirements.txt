@@ -3,7 +3,6 @@ llama-index
 llama-index-embeddings-huggingface
 chromadb
 groq
-python-dotenv
 fpdf
 streamlit
 openai

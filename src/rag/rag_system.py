@@ -4,7 +4,7 @@ Orchestrates RAG operations: document loading, querying, and management
 """
 import os
 import tempfile
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from llama_index.core import Settings, SimpleDirectoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding

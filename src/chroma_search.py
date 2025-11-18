@@ -2,12 +2,10 @@
 Chroma Embedding Search Module
 Provides search and document management functionality for ChromaDB collections
 """
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import chromadb
 import openai
-
-from chroma_setup import setup_chroma
 
 
 class ChromaEmbeddingSearch:

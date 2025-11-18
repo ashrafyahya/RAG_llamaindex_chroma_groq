@@ -4,11 +4,11 @@ Handles LLM provider selection and query processing
 """
 from typing import Optional
 
-from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.llms import MessageRole
 from llama_index.llms.groq import Groq as LlamaGroq
 
 from src.api_keys import APIKeyManager
-from src.config import MODEL_NAME, TOKEN_LIMIT
+from src.config import MODEL_NAME
 
 from . import memory_manager
 
