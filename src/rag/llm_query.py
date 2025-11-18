@@ -3,9 +3,11 @@ LLM Query Module
 Handles LLM provider selection and query processing
 """
 from typing import Optional
+import time
 
 from llama_index.core.llms import MessageRole
 from llama_index.llms.groq import Groq as LlamaGroq
+from openai import InternalServerError, APIError, APIConnectionError, RateLimitError
 
 from src.api_keys import APIKeyManager
 from src.config import MODEL_NAME
@@ -66,14 +68,15 @@ Defense Layer:
 """
 
 
-def query_with_groq(query: str, context: str, api_key: str) -> str:
+def query_with_groq(query: str, context: str, api_key: str, max_retries: int = 2) -> str:
     """
-    Process a query using the Groq LLM API.
+    Process a query using the Groq LLM API with retry logic.
     
     Args:
         query (str): User's question
         context (str): Retrieved document context
         api_key (str): Groq API key
+        max_retries (int): Maximum number of retry attempts
         
     Returns:
         str: Generated response or error message
@@ -86,11 +89,33 @@ def query_with_groq(query: str, context: str, api_key: str) -> str:
     if error:
         return error
 
-    response = llm.chat(messages)
-    answer = response.message.content
-
-    memory_manager.add_exchange(query, answer)
-    return answer
+    # Retry logic for handling transient errors
+    for attempt in range(max_retries + 1):
+        try:
+            response = llm.chat(messages)
+            answer = response.message.content
+            memory_manager.add_exchange(query, answer)
+            return answer
+        except InternalServerError as e:
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                print(f"Groq API returned 500 error. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                return ("⚠️ The Groq API is currently experiencing issues (HTTP 500 Internal Server Error). "
+                       "This is a temporary server-side problem. Please try one of the following:\n\n"
+                       "1. Wait a few moments and try again\n"
+                       "2. Switch to another LLM provider (OpenAI, Gemini, or Deepseek) in API Settings\n"
+                       "3. Check Groq's status page for updates")
+        except RateLimitError:
+            return ("⚠️ Rate limit exceeded for Groq API. Please wait a moment before trying again, "
+                   "or switch to another LLM provider in API Settings.")
+        except APIConnectionError:
+            return ("⚠️ Failed to connect to Groq API. Please check your internet connection and try again.")
+        except APIError as e:
+            return f"⚠️ Groq API error: {str(e)}. Please try again or switch to another provider in API Settings."
+        except Exception as e:
+            return f"⚠️ Unexpected error with Groq: {str(e)}"
 
 
 def query_with_openai(query: str, context: str, api_key: str) -> str:
@@ -253,10 +278,7 @@ def process_query(
         api_key = APIKeyManager.get_groq_key(api_key_groq)
         if not api_key:
             return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
-        try:
-            return query_with_groq(query, context, api_key)
-        except Exception as e:
-            return f"Error: Failed to get response from Groq: {str(e)}"
+        return query_with_groq(query, context, api_key)
 
     elif api_provider == "openai":
         api_key = APIKeyManager.get_openai_key(api_key_openai)

@@ -1,12 +1,13 @@
-
 """
 Memory Manager Module
 Handles advanced memory management with token counting, summarization, and context management
 """
 from typing import List, Optional, Tuple
+import time
 import tiktoken
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.llms.groq import Groq as LlamaGroq
+from openai import InternalServerError, APIError, APIConnectionError, RateLimitError
 
 from src.api_keys import APIKeyManager
 from src.config import (MODEL_NAME, QUESTION_THRESHOLD, SUMMARIZE_THRESHOLD,
@@ -219,14 +220,31 @@ class MemoryManager:
         prompt = self.summarization_prompt.format(conversation=conversation_text)
         messages = [ChatMessage(role=MessageRole.USER, content=prompt)]
         
+        max_retries = 2
+        
         try:
             if api_provider == "groq":
                 api_key = APIKeyManager.get_groq_key(api_key_groq)
                 if not api_key:
                     return None
                 llm = LlamaGroq(api_key=api_key, model=MODEL_NAME, temperature=0.1)
-                response = llm.chat(messages)
-                return response.message.content.strip()
+                
+                # Retry logic for Groq API
+                for attempt in range(max_retries + 1):
+                    try:
+                        response = llm.chat(messages)
+                        return response.message.content.strip()
+                    except (InternalServerError, APIError) as e:
+                        if attempt < max_retries:
+                            wait_time = 2 ** attempt
+                            print(f"Groq API error during summarization. Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"Groq API error during summarization after {max_retries} retries: {e}")
+                            return None
+                    except Exception as e:
+                        print(f"Unexpected error during Groq summarization: {e}")
+                        return None
                 
             elif api_provider == "openai":
                 api_key = APIKeyManager.get_openai_key(api_key_openai)
