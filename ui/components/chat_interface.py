@@ -106,35 +106,7 @@ def show_chat_header():
 
 def show_chat_interface():
     """Display chat interface"""
-    # Add JavaScript for copy functionality
-    st.markdown("""
-    <script>
-    function copyToClipboard(messageId, text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            // Visual feedback
-            const button = document.querySelector('#' + messageId + ' .copy-button');
-            if (button) {
-                const originalText = button.innerHTML;
-                button.innerHTML = '✓';
-                button.style.opacity = '1';
-                setTimeout(function() {
-                    button.innerHTML = originalText;
-                }, 2000);
-            }
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-        }
-        document.body.removeChild(textarea);
-    }
-    </script>
-    """, unsafe_allow_html=True)
+    import streamlit.components.v1 as components
 
     if not st.session_state.show_api_modal:
         if not st.session_state.messages:
@@ -156,8 +128,9 @@ def show_chat_interface():
                 if role == "user":
                     # User message on the right - plain text with human icon outside on the right
                     escaped_content = html.escape(content).replace('\n', '<br>')
-                    # Escape content for JavaScript (handle quotes and newlines)
-                    js_content = content.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+                    button_id = f"copy_btn_{message_id}"
+                    # Properly escape content for data attribute
+                    data_content = html.escape(content, quote=True)
                     st.markdown(
                         f"""
                         <div class="chat-message user-message" id="{message_id}">
@@ -166,7 +139,7 @@ def show_chat_interface():
                                     <div class="message-content">{escaped_content}</div>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" onclick="copyToClipboard('{message_id}', {repr(js_content)})" title="Copy message">
+                                        <button class="copy-button" id="{button_id}" data-copy-text="{data_content}" title="Copy message">
                                             📋
                                         </button>
                                     </div>
@@ -180,8 +153,9 @@ def show_chat_interface():
                 else:
                     # Assistant message on the left - with markdown support and robot icon outside on the left
                     html_content = markdown_to_html(content)
-                    # Escape content for JavaScript (handle quotes and newlines)
-                    js_content = content.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+                    button_id = f"copy_btn_{message_id}"
+                    # Properly escape content for data attribute
+                    data_content = html.escape(content, quote=True)
                     st.markdown(
                         f"""
                         <div class="chat-message assistant-message" id="{message_id}">
@@ -191,7 +165,7 @@ def show_chat_interface():
                                     <div class="message-content">{html_content}</div>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" onclick="copyToClipboard('{message_id}', {repr(js_content)})" title="Copy message">
+                                        <button class="copy-button" id="{button_id}" data-copy-text="{data_content}" title="Copy message">
                                             📋
                                         </button>
                                     </div>
@@ -203,6 +177,81 @@ def show_chat_interface():
                     )
 
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Add JavaScript to attach event listeners to copy buttons
+        components.html("""
+        <script>
+        (function() {
+            // Wait for parent document to be ready
+            const attachCopyListeners = function() {
+                const doc = window.parent.document;
+                const copyButtons = doc.querySelectorAll('.copy-button');
+                
+                copyButtons.forEach(function(button) {
+                    // Remove existing listeners to avoid duplicates
+                    const newButton = button.cloneNode(true);
+                    button.parentNode.replaceChild(newButton, button);
+                    
+                    // Add click event listener
+                    newButton.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const text = this.getAttribute('data-copy-text');
+                        const buttonId = this.id;
+                        
+                        // Use modern Clipboard API if available
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(function() {
+                                showFeedback(buttonId);
+                            }).catch(function(err) {
+                                console.error('Failed to copy: ', err);
+                                fallbackCopy(text, buttonId);
+                            });
+                        } else {
+                            fallbackCopy(text, buttonId);
+                        }
+                    });
+                });
+            };
+            
+            const fallbackCopy = function(text, buttonId) {
+                const doc = window.parent.document;
+                const textarea = doc.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.top = '0';
+                textarea.style.left = '0';
+                textarea.style.opacity = '0';
+                doc.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                try {
+                    doc.execCommand('copy');
+                    showFeedback(buttonId);
+                } catch (err) {
+                    console.error('Fallback copy failed: ', err);
+                }
+                doc.body.removeChild(textarea);
+            };
+            
+            const showFeedback = function(buttonId) {
+                const doc = window.parent.document;
+                const button = doc.getElementById(buttonId);
+                if (button) {
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '✓';
+                    button.style.opacity = '1';
+                    setTimeout(function() {
+                        button.innerHTML = originalText;
+                        button.style.opacity = '0.6';
+                    }, 2000);
+                }
+            };
+            
+            // Attach listeners with a slight delay to ensure DOM is ready
+            setTimeout(attachCopyListeners, 100);
+        })();
+        </script>
+        """, height=0)
 
         # Chat input 
         # Check if model is thinking before rendering input
@@ -237,7 +286,8 @@ def show_chat_interface():
             # Display user message immediately
             escaped_prompt = html.escape(prompt).replace('\n', '<br>')
             user_msg_id = f"msg_user_{len(st.session_state.messages)}"
-            js_prompt = prompt.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+            button_id = f"copy_btn_{user_msg_id}"
+            data_prompt = html.escape(prompt, quote=True)
             st.markdown(
                 f"""
                 <div class="chat-message user-message" id="{user_msg_id}">
@@ -246,7 +296,7 @@ def show_chat_interface():
                             <div class="message-content">{escaped_prompt}</div>
                             <div class="message-footer">
                                 <span class="message-timestamp">{current_time}</span>
-                                <button class="copy-button" onclick="copyToClipboard('{user_msg_id}', {repr(js_prompt)})" title="Copy message">
+                                <button class="copy-button" id="{button_id}" data-copy-text="{data_prompt}" title="Copy message">
                                     📋
                                 </button>
                             </div>
@@ -282,7 +332,8 @@ def show_chat_interface():
             response_time = datetime.now().strftime("%H:%M")
             html_response = markdown_to_html(response)
             assistant_msg_id = f"msg_assistant_{len(st.session_state.messages) + 1}"
-            js_response = response.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+            button_id = f"copy_btn_{assistant_msg_id}"
+            data_response = html.escape(response, quote=True)
             st.markdown(
                 f"""
                 <div class="chat-message assistant-message" id="{assistant_msg_id}">
@@ -292,7 +343,7 @@ def show_chat_interface():
                             <div class="message-content">{html_response}</div>
                             <div class="message-footer">
                                 <span class="message-timestamp">{response_time}</span>
-                                <button class="copy-button" onclick="copyToClipboard('{assistant_msg_id}', {repr(js_response)})" title="Copy message">
+                                <button class="copy-button" id="{button_id}" data-copy-text="{data_response}" title="Copy message">
                                     📋
                                 </button>
                             </div>
@@ -312,6 +363,76 @@ def show_chat_interface():
 
             # Reset thinking state to False
             st.session_state.is_thinking = False
+            
+            # Attach event listeners to newly added copy buttons
+            components.html("""
+            <script>
+            (function() {
+                const attachCopyListeners = function() {
+                    const doc = window.parent.document;
+                    const copyButtons = doc.querySelectorAll('.copy-button');
+                    
+                    copyButtons.forEach(function(button) {
+                        if (button.dataset.listenerAttached) return;
+                        button.dataset.listenerAttached = 'true';
+                        
+                        button.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const text = this.getAttribute('data-copy-text');
+                            const buttonId = this.id;
+                            
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(text).then(function() {
+                                    showFeedback(buttonId);
+                                }).catch(function(err) {
+                                    console.error('Failed to copy: ', err);
+                                    fallbackCopy(text, buttonId);
+                                });
+                            } else {
+                                fallbackCopy(text, buttonId);
+                            }
+                        });
+                    });
+                };
+                
+                const fallbackCopy = function(text, buttonId) {
+                    const doc = window.parent.document;
+                    const textarea = doc.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.top = '0';
+                    textarea.style.left = '0';
+                    textarea.style.opacity = '0';
+                    doc.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    try {
+                        doc.execCommand('copy');
+                        showFeedback(buttonId);
+                    } catch (err) {
+                        console.error('Fallback copy failed: ', err);
+                    }
+                    doc.body.removeChild(textarea);
+                };
+                
+                const showFeedback = function(buttonId) {
+                    const doc = window.parent.document;
+                    const button = doc.getElementById(buttonId);
+                    if (button) {
+                        const originalText = button.innerHTML;
+                        button.innerHTML = '✓';
+                        button.style.opacity = '1';
+                        setTimeout(function() {
+                            button.innerHTML = originalText;
+                            button.style.opacity = '0.6';
+                        }, 2000);
+                    }
+                };
+                
+                setTimeout(attachCopyListeners, 100);
+            })();
+            </script>
+            """, height=0)
 
             # Auto-scroll to bottom
             st.markdown("""
