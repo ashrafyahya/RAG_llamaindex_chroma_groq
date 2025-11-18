@@ -1,12 +1,22 @@
-import openai
-import chromadb
-from chroma_setup import setup_chroma
-from typing import List, Dict, Any, Optional
+"""
+Chroma Embedding Search Module
+Provides search and document management functionality for ChromaDB collections
+"""
+from typing import Dict, List, Optional
 
-# src/chroma_search.py
+import chromadb
+import openai
+
+
 class ChromaEmbeddingSearch:
     def __init__(self, db_path: str = "..\\chroma_db", collection_name: str = "document_embeddings"):
-        """Initialize the ChromaDB search interface"""
+        """
+        Initialize the ChromaDB search interface.
+        
+        Args:
+            db_path (str): Path to ChromaDB storage directory
+            collection_name (str): Name of the collection to use
+        """
         self.client = chromadb.PersistentClient(path=db_path)
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
@@ -14,7 +24,14 @@ class ChromaEmbeddingSearch:
         )
         
     def add_document(self, text: str, doc_id: str, metadata: Optional[Dict] = None):
-        """Add a new document with automatic embedding generation"""
+        """
+        Add a document to the collection with automatic embedding generation.
+        
+        Args:
+            text (str): The document text content
+            doc_id (str): Unique identifier for the document
+            metadata (Optional[Dict]): Additional metadata for the document
+        """
         self.collection.add(
             ids=[doc_id],
             documents=[text],
@@ -24,20 +41,26 @@ class ChromaEmbeddingSearch:
 
     def search_by_text(self, query_text: str, n_results: int = 5, 
                       metadata_filter: Optional[Dict] = None) -> Dict:
-        """Search for similar documents using text query"""
-        # Prepare query arguments
+        """
+        Search for similar documents using text query.
+        
+        Args:
+            query_text (str): Text query to search for
+            n_results (int): Maximum number of results to return
+            metadata_filter (Optional[Dict]): Filter results by metadata
+            
+        Returns:
+            Dict: Search results containing documents, distances, and metadata
+        """
         query_args = {
             "query_texts": [query_text],
             "n_results": n_results
         }
 
-        # Add metadata filter if provided
         if metadata_filter:
             query_args["where"] = metadata_filter
 
-        # Execute query
         results = self.collection.query(**query_args)
-
         return results
 
     def search_by_embedding(self, query_embedding: List[float], n_results: int = 5,

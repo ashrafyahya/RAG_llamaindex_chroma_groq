@@ -3,7 +3,6 @@ API Settings Modal Component
 Handles API key configuration UI
 """
 import streamlit as st
-
 from ui.local_storage import get_storage
 
 # Provider configuration

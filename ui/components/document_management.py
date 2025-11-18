@@ -3,7 +3,6 @@ Document Management Component
 Handles file uploads, deletion, and document listing
 """
 import streamlit as st
-
 from src.app import (clear_all_documents, delete_document,
                      get_uploaded_documents, upload_document)
 
@@ -11,7 +10,7 @@ from src.app import (clear_all_documents, delete_document,
 def show_document_management_sidebar():
     """Render document management in sidebar"""
     with st.sidebar:
-        st.markdown("<h2 style='margin: -50px 0 0 0; padding: 0;'>Document Management</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='margin: -56px 0 0 0; padding: 0;'>Document Management</h2>", unsafe_allow_html=True)
 
         # API Settings button
         if st.button("⚙️ API Settings", help="Configure your API keys", use_container_width=True):
@@ -64,15 +63,14 @@ def show_document_management_sidebar():
 
         # Display uploaded documents
         st.subheader("Uploaded Documents:")
+        st.markdown("<br>", unsafe_allow_html=True)
 
         if uploaded_docs:
             for doc in uploaded_docs:
-                col1, col2, col3 = st.columns([3, 2, 1])
+                col1, col2 = st.columns([3, 1])
                 with col1:
                     st.write(f"**{doc['name']}**")
                 with col2:
-                    st.write(f"{doc['size'] / 1024:.2f} KB")
-                with col3:
                     if st.button("🗑️", key=f"delete_{doc['ids'][0]}"):
                         deleted_count = 0
                         for doc_id in doc['ids']:
