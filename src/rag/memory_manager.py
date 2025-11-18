@@ -253,22 +253,54 @@ class MemoryManager:
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key)
                 openai_messages = [{"role": "user", "content": prompt}]
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=openai_messages,
-                    temperature=0.1
-                )
-                return response.choices[0].message.content.strip()
+                
+                # Retry logic for OpenAI API
+                for attempt in range(max_retries + 1):
+                    try:
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=openai_messages,
+                            temperature=0.1
+                        )
+                        return response.choices[0].message.content.strip()
+                    except (InternalServerError, APIError) as e:
+                        if attempt < max_retries:
+                            wait_time = 2 ** attempt
+                            print(f"OpenAI API error during summarization. Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"OpenAI API error during summarization after {max_retries} retries: {e}")
+                            return None
+                    except Exception as e:
+                        print(f"Unexpected error during OpenAI summarization: {e}")
+                        return None
                 
             elif api_provider == "gemini":
                 api_key = APIKeyManager.get_gemini_key(api_key_gemini)
                 if not api_key:
                     return None
                 import google.generativeai as genai
+                from google.api_core import exceptions as google_exceptions
+                
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel('gemini-pro')
-                response = model.generate_content(prompt)
-                return response.text.strip()
+                
+                # Retry logic for Gemini API
+                for attempt in range(max_retries + 1):
+                    try:
+                        response = model.generate_content(prompt)
+                        return response.text.strip()
+                    except (google_exceptions.InternalServerError, google_exceptions.ServiceUnavailable) as e:
+                        if attempt < max_retries:
+                            wait_time = 2 ** attempt
+                            print(f"Gemini API error during summarization. Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"Gemini API error during summarization after {max_retries} retries: {e}")
+                            return None
+                    except Exception as e:
+                        print(f"Unexpected error during Gemini summarization: {e}")
+                        return None
                 
             elif api_provider == "deepseek":
                 api_key = APIKeyManager.get_deepseek_key(api_key_deepseek)
@@ -277,12 +309,27 @@ class MemoryManager:
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
                 deepseek_messages = [{"role": "user", "content": prompt}]
-                response = client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=deepseek_messages,
-                    temperature=0.1
-                )
-                return response.choices[0].message.content.strip()
+                
+                # Retry logic for Deepseek API
+                for attempt in range(max_retries + 1):
+                    try:
+                        response = client.chat.completions.create(
+                            model="deepseek-chat",
+                            messages=deepseek_messages,
+                            temperature=0.1
+                        )
+                        return response.choices[0].message.content.strip()
+                    except (InternalServerError, APIError) as e:
+                        if attempt < max_retries:
+                            wait_time = 2 ** attempt
+                            print(f"Deepseek API error during summarization. Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"Deepseek API error during summarization after {max_retries} retries: {e}")
+                            return None
+                    except Exception as e:
+                        print(f"Unexpected error during Deepseek summarization: {e}")
+                        return None
             else:
                 print(f"Unknown API provider: {api_provider}")
                 return None
