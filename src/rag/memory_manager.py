@@ -94,7 +94,7 @@ class MemoryManager:
             if summary:
                 return f"Previous conversation summary:\n{summary}"
         except Exception as e:
-            print(f"[MEMORY_DEBUG] Model summarization failed: {e}")
+            print(f"Model summarization failed: {e}")
         
         # Fallback to simple summary if model fails
         summary = "Previous conversation summary:\n"
@@ -146,16 +146,16 @@ class MemoryManager:
         context_tokens = self.count_tokens(context)
         history_tokens = self.get_chat_history_token_count()
 
-        # Debug output
-        print(f"[MEMORY_DEBUG] Query tokens: {query_tokens}")
-        print(f"[MEMORY_DEBUG] System tokens: {system_tokens}")
-        print(f"[MEMORY_DEBUG] Chat history length: {len(self.chat_history)} messages")
+        # Log token usage for monitoring
+        print(f"Query tokens: {query_tokens}")
+        print(f"System tokens: {system_tokens}")
+        print(f"Chat history: {len(self.chat_history)} messages")
 
-        # Pipeline Step 1: Check if user question is too big (>20% of token limit)
+        # Check if user question exceeds size limit
         if query_tokens > self.token_limit * self.question_threshold:
             return [], "Your question is too long. Please reduce your input to continue the conversation.", False
 
-        # Pipeline Step 2: Check if 70% of token limit is reached
+        # Check if summarization is needed
         total_estimated_tokens = system_tokens + context_tokens + query_tokens + history_tokens
         seventy_percent_limit = int(self.token_limit * self.summarize_threshold)
         
@@ -163,20 +163,20 @@ class MemoryManager:
         summary_content = None
         
         if total_estimated_tokens > seventy_percent_limit and len(self.chat_history) > 0:
-            print(f"[MEMORY_DEBUG] 70% token limit reached ({total_estimated_tokens} > {seventy_percent_limit}), triggering summarization")
+            print(f"Token limit reached ({total_estimated_tokens} > {seventy_percent_limit}), starting summarization")
             
-            # Summarize all chat history except last 3 messages
-            if len(self.chat_history) > 6:  # More than 3 exchanges
-                print("[SUMMARIZATION] Starting chat history summarization...")
+            # Summarize older messages, keep recent exchanges
+            if len(self.chat_history) > 6:
+                print("Starting chat history summarization...")
                 needs_summarization = True
-                messages_to_summarize = self.chat_history[:-6]  # All except last 6 messages (3 exchanges)
+                messages_to_summarize = self.chat_history[:-6]
                 summary_content = self.summarize_messages(messages_to_summarize, api_provider, 
                                                         api_key_groq, api_key_openai, 
                                                         api_key_gemini, api_key_deepseek)
-                print("[SUMMARIZATION] Chat history summarization completed")
+                print("Chat history summarization completed")
                 
-                # Clear chat history and keep only last 3 exchanges + summary
-                self.chat_history = self.chat_history[-6:]  # Keep last 6 messages (3 exchanges)
+                # Keep only recent messages after summarization
+                self.chat_history = self.chat_history[-6:]
 
         # Prepare the messages for the LLM
         messages = [ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)]
@@ -200,13 +200,12 @@ class MemoryManager:
             content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
         ))
 
-        # Pipeline Step 3: Final check - if still over token limit after summarization
+        # Final validation - ensure we're within token limits
         final_total_tokens = sum(self.count_tokens(msg.content) for msg in messages)
         if final_total_tokens > self.token_limit:
             return [], "The conversation has become too long. Please start a new conversation to continue.", False
         
-        print(f"[MEMORY_DEBUG] Final total tokens sent to model: {final_total_tokens}")
-
+        print(f"Final token count: {final_total_tokens}")
         return messages, None, needs_summarization
 
     def add_exchange(self, query: str, response: str) -> None:
@@ -268,11 +267,11 @@ class MemoryManager:
                 )
                 return response.choices[0].message.content.strip()
             else:
-                print(f"[MEMORY_DEBUG] Unknown API provider: {api_provider}")
+                print(f"Unknown API provider: {api_provider}")
                 return None
                 
         except Exception as e:
-            print(f"[MEMORY_DEBUG] Error in model summarization with {api_provider}: {e}")
+            print(f"Error in model summarization with {api_provider}: {e}")
             return None
     
 

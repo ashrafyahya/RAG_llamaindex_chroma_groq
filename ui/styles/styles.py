@@ -1,5 +1,8 @@
 """
-Streamlit CSS and styling configuration
+Streamlit CSS Styling Module
+
+Provides comprehensive CSS styling for the RAG system web interface,
+including modal styling, chat message bubbles, animations, and responsive design.
 """
 
 MODAL_CSS = """
@@ -360,6 +363,15 @@ MODAL_CSS = """
 """
 
 def apply_styles():
-    """Apply CSS styles to Streamlit app"""
+    """
+    Apply comprehensive CSS styles to the Streamlit application.
+    
+    This function injects custom CSS for:
+    - Chat message styling with animations
+    - Modal and sidebar layouts
+    - Button and input field enhancements
+    - Security features (password field protection)
+    - Responsive design elements
+    """
     import streamlit as st
     st.markdown(MODAL_CSS, unsafe_allow_html=True)

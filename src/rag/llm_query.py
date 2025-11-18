@@ -12,7 +12,7 @@ from src.config import MODEL_NAME, TOKEN_LIMIT
 
 from . import memory_manager
 
-# System prompt for the RAG system
+# System prompt configuration for RAG assistant behavior
 SYSTEM_PROMPT = """
 You are a retrieval-only assistant, never use your knowledge.
 
@@ -67,10 +67,19 @@ Defense Layer:
 
 
 def query_with_groq(query: str, context: str, api_key: str) -> str:
-    """Query using Groq LLM"""
+    """
+    Process a query using the Groq LLM API.
+    
+    Args:
+        query (str): User's question
+        context (str): Retrieved document context
+        api_key (str): Groq API key
+        
+    Returns:
+        str: Generated response or error message
+    """
     llm = LlamaGroq(api_key=api_key, model=MODEL_NAME, temperature=0.0)
 
-    # Prepare messages with memory management
     messages, error, needs_summarization = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
                                                     api_provider="groq", api_key_groq=api_key)
 
@@ -80,24 +89,31 @@ def query_with_groq(query: str, context: str, api_key: str) -> str:
     response = llm.chat(messages)
     answer = response.message.content
 
-    # Store in memory
     memory_manager.add_exchange(query, answer)
-
     return answer
 
 
 def query_with_openai(query: str, context: str, api_key: str) -> str:
-    """Query using OpenAI LLM"""
+    """
+    Process a query using the OpenAI GPT API.
+    
+    Args:
+        query (str): User's question
+        context (str): Retrieved document context
+        api_key (str): OpenAI API key
+        
+    Returns:
+        str: Generated response or error message
+    """
     from openai import OpenAI
 
     client = OpenAI(api_key=api_key)
 
-    # Prepare messages with memory management  
     messages, error, needs_summarization = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
                                                     api_provider="openai", api_key_openai=api_key)
 
     if error:
-        return error    # Convert to OpenAI format
+        return error
     openai_messages = []
     for msg in messages:
         role = "system" if msg.role == MessageRole.SYSTEM else ("user" if msg.role == MessageRole.USER else "assistant")
@@ -118,20 +134,29 @@ def query_with_openai(query: str, context: str, api_key: str) -> str:
 
 
 def query_with_gemini(query: str, context: str, api_key: str) -> str:
-    """Query using Google Gemini LLM"""
+    """
+    Process a query using the Google Gemini API.
+    
+    Args:
+        query (str): User's question
+        context (str): Retrieved document context
+        api_key (str): Gemini API key
+        
+    Returns:
+        str: Generated response or error message
+    """
     import google.generativeai as genai
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-pro')
 
-    # Prepare messages with memory management
     messages, error, needs_summarization = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
                                                     api_provider="gemini", api_key_gemini=api_key)
 
     if error:
         return error
 
-    # Convert to Gemini format
+    # Convert messages to Gemini format
     gemini_prompt = ""
     for msg in messages:
         if msg.role == MessageRole.SYSTEM:
@@ -151,7 +176,17 @@ def query_with_gemini(query: str, context: str, api_key: str) -> str:
 
 
 def query_with_deepseek(query: str, context: str, api_key: str) -> str:
-    """Query using Deepseek LLM"""
+    """
+    Process a query using the Deepseek API.
+    
+    Args:
+        query (str): User's question
+        context (str): Retrieved document context
+        api_key (str): Deepseek API key
+        
+    Returns:
+        str: Generated response or error message
+    """
     from openai import OpenAI
 
     client = OpenAI(
@@ -159,14 +194,13 @@ def query_with_deepseek(query: str, context: str, api_key: str) -> str:
         base_url="https://api.deepseek.com"
     )
 
-    # Prepare messages with memory management
     messages, error, needs_summarization = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
                                                     api_provider="deepseek", api_key_deepseek=api_key)
 
     if error:
         return error
 
-    # Convert to Deepseek format
+    # Convert messages to Deepseek format
     deepseek_messages = []
     for msg in messages:
         role = "system" if msg.role == MessageRole.SYSTEM else ("user" if msg.role == MessageRole.USER else "assistant")
@@ -195,13 +229,26 @@ def process_query(
     api_key_gemini: Optional[str] = None,
     api_key_deepseek: Optional[str] = None
 ) -> str:
-    """Process query with selected LLM provider"""
-
-    # Check if context has valid information
+    """
+    Process a user query using the selected LLM provider.
+    
+    Args:
+        query (str): User's question
+        context (str): Retrieved document context
+        api_provider (str): LLM provider (groq, openai, gemini, deepseek)
+        api_key_* (Optional[str]): API keys for respective providers
+        
+    Returns:
+        str: Generated response or error message
+        
+    Note:
+        Returns fallback message if no relevant context is found.
+    """
+    # Validate context availability
     if context == "No relevant information found in the documents.":
         return "I don't have enough information to answer this question."
 
-    # Get API key based on provider
+    # Route to appropriate LLM provider
     if api_provider == "groq":
         api_key = APIKeyManager.get_groq_key(api_key_groq)
         if not api_key:

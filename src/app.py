@@ -4,11 +4,11 @@ Orchestrates RAG system and query processing
 """
 from typing import Optional
 
+from src.rag import memory_manager
 from src.rag.llm_query import process_query
-from src.rag import memory_manager 
 from src.rag.rag_system import get_rag_system
 
-# Initialize RAG system
+# Initialize the global RAG system instance
 rag_system = get_rag_system()
 
 
@@ -26,14 +26,24 @@ def query_documents(
     api_key_gemini: Optional[str] = None,
     api_key_deepseek: Optional[str] = None
 ):
-    """Query ChromaDB and generate response with LLM"""
-    # Search for relevant documents
+    """
+    Query the document database and generate a response using the selected LLM.
+    
+    Args:
+        query (str): The user's question
+        n_results (int): Number of similar documents to retrieve
+        api_provider (str): LLM provider to use (groq, openai, gemini, deepseek)
+        api_key_* (Optional[str]): API keys for respective providers
+        
+    Returns:
+        str: Generated response from the LLM based on retrieved documents
+    """
     results = rag_system.search_documents(query, n_results)
     
-    # Check similarity threshold
+    # Check document similarity scores
     similarities = results.get("distances", [[]])[0]
     if similarities:
-        print(f"min(similarities): {min(similarities)}")
+        print(f"Best similarity score: {min(similarities)}")
     
     if not similarities or min(similarities) < 0.70:
         return "I don't have enough information to answer this question."
@@ -76,12 +86,19 @@ def clear_all_documents():
 
 
 def clear_chat_memory():
-    """Clear the chat memory"""
+    """
+    Clear the conversation memory by resetting the chat history.
+    This allows users to start fresh conversations without context.
+    """
     memory_manager.chat_history = []
 
 
 def chat_with_rag():
-    """Interactive chat loop"""
+    """
+    Start an interactive command-line chat session with the RAG system.
+    Users can ask questions and receive responses based on loaded documents.
+    Type 'quit', 'exit', or 'q' to end the session.
+    """
     while True:
         query = input("\nEnter your query (or 'quit' to exit): ")
         if query.lower() in ['quit', 'exit', 'q']:
@@ -92,5 +109,4 @@ def chat_with_rag():
 
 
 if __name__ == "__main__":
-    # load_documents()
     chat_with_rag()

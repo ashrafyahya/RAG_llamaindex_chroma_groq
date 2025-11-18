@@ -185,8 +185,8 @@ def show_chat_interface():
             prompt = st.session_state.user_input
             st.session_state.user_input = None
 
-            # Debug output for every user message
-            print(f"[CHAT_DEBUG] User sent message: length: {len(prompt)} chars")
+            # Log user message for monitoring
+            print(f"User message received: {len(prompt)} characters")
 
             current_time = datetime.now().strftime("%H:%M")
             st.session_state.messages.append({

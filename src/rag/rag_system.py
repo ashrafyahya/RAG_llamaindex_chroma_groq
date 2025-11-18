@@ -17,25 +17,34 @@ class RAGSystem:
     """Main RAG system orchestrator"""
     
     def __init__(self):
-        """Initialize RAG system with embeddings and database"""
-        # Initialize the embedding model
+        """
+        Initialize the RAG system with embedding model and database connection.
+        Sets up HuggingFace embeddings and ChromaDB for document storage/retrieval.
+        """
+        # Configure embedding model for document vectorization
         Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
         
-        # Initialize ChromaDB
+        # Initialize ChromaDB client and collection
         self.chroma_client, self.collection = setup_chroma()
         print(f"ChromaDB initialized with collection: {self.collection.name}\n")
         
         self.search = ChromaEmbeddingSearch()
     
     def load_documents(self):
-        """Load documents from the data directory"""
+        """
+        Load documents from the data directory into the database.
+        Checks for existing documents to avoid duplicates.
+        
+        Note:
+            Documents are loaded from a 'data' directory relative to the project structure.
+            Only processes new documents if the collection is empty.
+        """
         data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
         documents = SimpleDirectoryReader(data_path).load_data()
 
-        # Check if documents already exist in ChromaDB
+        # Prevent duplicate document insertion
         existing_docs = self.search.collection.get(include=["documents"])["documents"]
         if not existing_docs:
-            # Only add documents if the collection is empty
             for doc in documents:
                 self.search.add_document(
                     text=doc.text,
@@ -47,7 +56,16 @@ class RAGSystem:
             print("Documents already exist in ChromaDB. Skipping insertion.\n")
     
     def search_documents(self, query: str, n_results: int = 3) -> Dict:
-        """Search for similar documents"""
+        """
+        Search for documents similar to the given query.
+        
+        Args:
+            query (str): The search query text
+            n_results (int): Maximum number of results to return
+            
+        Returns:
+            Dict: Search results containing documents, distances, and metadata
+        """
         results = self.search.collection.query(
             query_texts=[query],
             n_results=n_results
@@ -55,7 +73,17 @@ class RAGSystem:
         return results
     
     def format_search_results(self, results: Dict, query: str, n_results: int = 3) -> str:
-        """Format search results into readable text"""
+        """
+        Format search results into human-readable text for LLM processing.
+        
+        Args:
+            results (Dict): Raw search results from ChromaDB
+            query (str): Original query (for context)
+            n_results (int): Number of results to format
+            
+        Returns:
+            str: Formatted text containing document sources and content
+        """
         if not results or 'documents' not in results or not results['documents'][0]:
             return "No relevant information found in the documents."
         
@@ -71,7 +99,19 @@ class RAGSystem:
         return formatted_answer
     
     def upload_document(self, uploaded_file) -> str:
-        """Upload and index a single document"""
+        """
+        Upload and index a document file for searching.
+        
+        Args:
+            uploaded_file: File object from Streamlit file uploader
+            
+        Returns:
+            str: Success or error message
+            
+        Note:
+            Prevents duplicate uploads by checking existing document names.
+            Supports various file formats through SimpleDirectoryReader.
+        """
         try:
             existing_docs = self.get_uploaded_documents()
             existing_names = [doc['name'] for doc in existing_docs]
@@ -105,7 +145,15 @@ class RAGSystem:
             return f"Error uploading document: {str(e)}"
     
     def delete_document(self, doc_id: str) -> str:
-        """Delete a document from the database"""
+        """
+        Remove a document from the database by its unique identifier.
+        
+        Args:
+            doc_id (str): Unique identifier of the document to delete
+            
+        Returns:
+            str: Success or error message
+        """
         try:
             result = self.search.delete_document(doc_id)
             return result
