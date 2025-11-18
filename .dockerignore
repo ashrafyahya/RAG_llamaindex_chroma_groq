@@ -29,6 +29,10 @@ Thumbs.db
 # Local storage cache (will be created fresh in container)
 .streamlit_cache/
 
+# Vector store & uploaded data (exclude to force fresh init in image)
+chroma_db/
+data/
+
 # Logs
 *.log
 

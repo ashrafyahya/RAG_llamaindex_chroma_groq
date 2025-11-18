@@ -30,7 +30,7 @@ If you get an error like "docker-compose is not recognized", try using `docker c
    ```
 
 3. **Access the application:**
-   Open your browser and go to `http://localhost:8501`
+   Open your browser and go to `http://localhost:8504`
 
 4. **Stop the application:**
    ```bash
