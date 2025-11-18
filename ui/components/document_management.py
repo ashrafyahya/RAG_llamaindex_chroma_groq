@@ -7,6 +7,31 @@ from src.app import (clear_all_documents, delete_document,
                      get_uploaded_documents, upload_document)
 
 
+def show_chat_actions_in_sidebar():
+    """Render chat action buttons in sidebar"""
+    from ui.components.chat_interface import generate_chat_pdf, clear_chat_memory
+    
+    if st.session_state.messages:
+        st.markdown("---")
+        st.markdown("### Chat Actions")
+        
+        # Clear Chat button
+        if st.button("🗑️ Clear Chat", help="Start a new chat by clearing all messages", use_container_width=True):
+            st.session_state.messages = []
+            clear_chat_memory()
+            st.rerun()
+        
+        # Download button
+        st.download_button(
+            label="📄 Download Chat",
+            data=generate_chat_pdf(),
+            file_name="chat_history.pdf",
+            mime="application/pdf",
+            help="Download the current chat history as a PDF file",
+            use_container_width=True
+        )
+
+
 def show_document_management_sidebar():
     """Render document management in sidebar"""
     with st.sidebar:
@@ -16,6 +41,9 @@ def show_document_management_sidebar():
         if st.button("⚙️ API Settings", help="Configure your API keys", use_container_width=True):
             st.session_state.show_api_modal = not st.session_state.show_api_modal
             st.rerun()
+
+        # Chat actions (Clear and Download buttons)
+        show_chat_actions_in_sidebar()
 
         # Fetch uploaded documents
         uploaded_docs = get_uploaded_documents()

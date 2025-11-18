@@ -82,27 +82,8 @@ def generate_chat_pdf():
 
 def show_chat_header():
     """Display chat header with action buttons"""
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        title_col = st.empty()
-        if not st.session_state.show_api_modal:
-            title_col.markdown('<h1 style="margin: -40px 0 0 0; padding: 0;">🤖 RAG-based AI Assistant</h1>', unsafe_allow_html=True)
-
-    with col2:
-        if st.session_state.messages and not st.session_state.show_api_modal:
-            if st.button("🗑️ Clear Chat", help="Start a new chat by clearing all messages"):
-                st.session_state.messages = []
-                clear_chat_memory()
-                st.rerun()
-
-            if st.download_button(
-                label="📄 Download",
-                data=generate_chat_pdf(),
-                file_name="chat_history.pdf",
-                mime="application/pdf",
-                help="Download the current chat history as a PDF file"
-            ):
-                pass
+    if not st.session_state.show_api_modal:
+        st.markdown('<h1 style="margin: -40px 0 0 0; padding: 0;">🤖 RAG-based AI Assistant</h1>', unsafe_allow_html=True)
 
 
 def show_chat_interface():
@@ -436,35 +417,64 @@ def show_chat_interface():
             """, height=0)
 
             # Auto-scroll to bottom and refocus input
-            st.markdown("""
+            components.html("""
             <script>
-            setTimeout(function() {
-                // Scroll to bottom
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                
-                // Refocus the chat input
-                const chatInput = document.querySelector('[data-testid="stChatInput"] input');
-                if (chatInput) {
-                    chatInput.focus();
+            (function() {
+                function scrollAndFocus() {
+                    const doc = window.parent.document;
+                    
+                    // Scroll to bottom
+                    window.parent.scrollTo({ 
+                        top: doc.body.scrollHeight, 
+                        behavior: 'smooth' 
+                    });
+                    
+                    // Refocus the chat input with multiple selectors
+                    setTimeout(function() {
+                        const chatInput = doc.querySelector('[data-testid="stChatInput"] input') ||
+                                        doc.querySelector('input[type="text"]') ||
+                                        doc.querySelector('.stChatInput input');
+                        if (chatInput) {
+                            chatInput.focus();
+                            chatInput.click();
+                        }
+                    }, 300);
                 }
-            }, 200);
+                
+                // Try multiple times to ensure focus
+                scrollAndFocus();
+                setTimeout(scrollAndFocus, 500);
+                setTimeout(scrollAndFocus, 1000);
+            })();
             </script>
-            """, unsafe_allow_html=True)
+            """, height=0)
 
             # Rerun to refresh the UI
             st.rerun()
 
     # Ensure chat input is focused when page loads or updates
     if not st.session_state.is_thinking:
-        st.markdown("""
+        components.html("""
         <script>
-        setTimeout(function() {
-            const chatInput = document.querySelector('[data-testid="stChatInput"] input');
-            if (chatInput) {
-                chatInput.focus();
+        (function() {
+            function focusInput() {
+                const doc = window.parent.document;
+                const chatInput = doc.querySelector('[data-testid="stChatInput"] input') ||
+                                doc.querySelector('input[type="text"]') ||
+                                doc.querySelector('.stChatInput input');
+                if (chatInput) {
+                    chatInput.focus();
+                    chatInput.click();
+                }
             }
-        }, 100);
+            
+            // Focus immediately and retry
+            focusInput();
+            setTimeout(focusInput, 100);
+            setTimeout(focusInput, 300);
+            setTimeout(focusInput, 500);
+        })();
         </script>
-        """, unsafe_allow_html=True)
+        """, height=0)
 
 
