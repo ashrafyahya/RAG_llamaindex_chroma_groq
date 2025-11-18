@@ -10,8 +10,8 @@ from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.llms.groq import Groq as LlamaGroq
 
 from src.api_keys import APIKeyManager
-from src.config import (MODEL_NAME, QUESTION_THRESHOLD, RECENT_MESSAGES_LIMIT,
-                        SUMMARIZE_THRESHOLD, TOKEN_LIMIT)
+from src.config import (MODEL_NAME, QUESTION_THRESHOLD, SUMMARIZE_THRESHOLD,
+                        TOKEN_LIMIT)
 
 
 class MemoryManager:
@@ -22,7 +22,7 @@ class MemoryManager:
         # Use tiktoken for accurate token counting
         self.encoding = tiktoken.get_encoding("cl100k_base")  # GPT-4 tokenizer
         self.token_limit = TOKEN_LIMIT
-        self.recent_messages_limit = RECENT_MESSAGES_LIMIT  # Number of recent messages to include directly
+
         self.summarize_threshold = SUMMARIZE_THRESHOLD  # 70% of token limit
         self.question_threshold = QUESTION_THRESHOLD  # 20% of token limit for questions
 
@@ -130,177 +130,84 @@ class MemoryManager:
         api_key_openai: Optional[str] = None,
         api_key_gemini: Optional[str] = None,
         api_key_deepseek: Optional[str] = None
-    ) -> Tuple[List[ChatMessage], Optional[str]]:
+    ) -> Tuple[List[ChatMessage], Optional[str], bool]:
         """
-        Prepare the context for the LLM query
+        Prepare the context for the LLM query using simplified pipeline
 
         Returns:
-            Tuple of (messages, error_message)
+            Tuple of (messages, error_message, needs_summarization)
             If error_message is not None, the query should not proceed
+            If needs_summarization is True, UI should show "Summarizing..." state
         """
 
         # Calculate token usage
         query_tokens = self.count_tokens(query)
         system_tokens = self.count_tokens(system_prompt)
         context_tokens = self.count_tokens(context)
+        history_tokens = self.get_chat_history_token_count()
 
-        # Debug output for testing
+        # Debug output
         print(f"[MEMORY_DEBUG] Query tokens: {query_tokens}")
         print(f"[MEMORY_DEBUG] System tokens: {system_tokens}")
-        print(f"[MEMORY_DEBUG] Context tokens: {context_tokens}")
         print(f"[MEMORY_DEBUG] Chat history length: {len(self.chat_history)} messages")
-        history_tokens = self.get_chat_history_token_count()
-        print(f"[MEMORY_DEBUG] Chat history total tokens: {history_tokens}")
 
-        # Check if the query itself is too long (>20% of token limit)
+        # Pipeline Step 1: Check if user question is too big (>20% of token limit)
         if query_tokens > self.token_limit * self.question_threshold:
-            return [], "Your question is too long. Please ask a shorter question."
+            return [], "Your question is too long. Please reduce your input to continue the conversation.", False
 
-        # Prepare the messages for the LLM
-        messages = [
-            ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
-        ]
-
-        # Add chat history if available
-        if len(self.chat_history) > 0:
-            # Get recent messages (up to 3)
-            recent_messages = self.get_recent_messages(self.recent_messages_limit)
-
-            # Add older messages summary if available and we have enough messages
-            if len(self.chat_history) > self.recent_messages_limit:
-                older_messages = self.get_older_messages(3, 15)  # Messages 4-15
-                if older_messages:
-                    summary = self.summarize_messages(older_messages, api_provider, 
-                                                    api_key_groq, api_key_openai, 
-                                                    api_key_gemini, api_key_deepseek)
-                    messages.append(
-                        ChatMessage(
-                            role=MessageRole.SYSTEM,
-                            content=f"Previous conversation summary:\n{summary}"
-                        )
-                    )
-
-            # Add recent messages
-            messages.extend(recent_messages)
-
-        # Add current query with context
-        messages.append(
-            ChatMessage(
-                role=MessageRole.USER,
-                content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
-            )
-        )
-
-        # Check total token count
-        total_tokens = 0
-        for msg in messages:
-            total_tokens += self.count_tokens(msg.content)
-
-        # If over token limit, try to reduce context or summarize more aggressively
-        if total_tokens > self.token_limit:
-            # For small histories (<10 messages), allow some flexibility
-            if len(self.chat_history) < 10:
-                # Try truncating context to fit
-                max_context_tokens = self.token_limit - (total_tokens - context_tokens) - 100  # Leave some buffer
-                if max_context_tokens > 100:  # Minimum useful context
-                    truncated_context = context
-                    while self.count_tokens(truncated_context) > max_context_tokens and len(truncated_context) > 100:
-                        # Truncate by removing the last 10% of content
-                        truncate_point = int(len(truncated_context) * 0.9)
-                        truncated_context = truncated_context[:truncate_point] + "\n[Context truncated due to length]"
-
-                    # Update the user message with truncated context
-                    for i, msg in enumerate(messages):
-                        if msg.role == MessageRole.USER:
-                            messages[i] = ChatMessage(
-                                role=MessageRole.USER,
-                                content=f"Context:\n{truncated_context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
-                            )
-                            break
-
-                    # Recalculate total tokens
-                    total_tokens = 0
-                    for msg in messages:
-                        total_tokens += self.count_tokens(msg.content)
-
-            # If still over limit and we have messages beyond 15, summarize them
-            if total_tokens > self.token_limit and len(self.chat_history) > 15:
-                # Get messages beyond the first 15
-                very_old_messages = self.get_older_messages(15, len(self.chat_history))
-                if very_old_messages:
-                    summary = self.summarize_messages(very_old_messages, api_provider, 
-                                                    api_key_groq, api_key_openai, 
-                                                    api_key_gemini, api_key_deepseek)
-                    # Find and replace the existing summary
-                    for i, msg in enumerate(messages):
-                        if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
-                            messages[i] = ChatMessage(
-                                role=MessageRole.SYSTEM,
-                                content=f"Previous conversation summary:\n{summary}"
-                            )
-                            break
-
-                    # Recalculate total tokens
-                    total_tokens = 0
-                    for msg in messages:
-                        total_tokens += self.count_tokens(msg.content)
-
-            # Final check: if still over limit, summarize more aggressively instead of error
-            if total_tokens > self.token_limit:
-                # For any history size, try to summarize everything beyond recent messages
-                if len(self.chat_history) > self.recent_messages_limit:
-                    # Summarize all messages beyond the recent ones (4 to end)
-                    all_older_messages = self.get_older_messages(self.recent_messages_limit, len(self.chat_history))
-                    if all_older_messages:
-                        summary = self.summarize_messages(all_older_messages, api_provider, 
+        # Pipeline Step 2: Check if 70% of token limit is reached
+        total_estimated_tokens = system_tokens + context_tokens + query_tokens + history_tokens
+        seventy_percent_limit = int(self.token_limit * self.summarize_threshold)
+        
+        needs_summarization = False
+        summary_content = None
+        
+        if total_estimated_tokens > seventy_percent_limit and len(self.chat_history) > 0:
+            print(f"[MEMORY_DEBUG] 70% token limit reached ({total_estimated_tokens} > {seventy_percent_limit}), triggering summarization")
+            
+            # Summarize all chat history except last 3 messages
+            if len(self.chat_history) > 6:  # More than 3 exchanges
+                print("[SUMMARIZATION] Starting chat history summarization...")
+                needs_summarization = True
+                messages_to_summarize = self.chat_history[:-6]  # All except last 6 messages (3 exchanges)
+                summary_content = self.summarize_messages(messages_to_summarize, api_provider, 
                                                         api_key_groq, api_key_openai, 
                                                         api_key_gemini, api_key_deepseek)
-                        # Replace any existing summary or add new one
-                        summary_found = False
-                        for i, msg in enumerate(messages):
-                            if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
-                                messages[i] = ChatMessage(
-                                    role=MessageRole.SYSTEM,
-                                    content=f"Previous conversation summary:\n{summary}"
-                                )
-                                summary_found = True
-                                break
-                        if not summary_found:
-                            # Insert summary after system prompt
-                            messages.insert(1, ChatMessage(
-                                role=MessageRole.SYSTEM,
-                                content=f"Previous conversation summary:\n{summary}"
-                            ))
+                print("[SUMMARIZATION] Chat history summarization completed")
+                
+                # Clear chat history and keep only last 3 exchanges + summary
+                self.chat_history = self.chat_history[-6:]  # Keep last 6 messages (3 exchanges)
 
-                        # Recalculate total tokens
-                        total_tokens = 0
-                        for msg in messages:
-                            total_tokens += self.count_tokens(msg.content)
+        # Prepare the messages for the LLM
+        messages = [ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)]
+        
+        # Add summary if we have one
+        if summary_content and "Previous conversation summary:" not in summary_content:
+            messages.append(ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=f"Previous conversation summary:\n{summary_content}"
+            ))
+        elif summary_content:
+            messages.append(ChatMessage(role=MessageRole.SYSTEM, content=summary_content))
+        
+        # Add remaining chat history
+        if len(self.chat_history) > 0:
+            messages.extend(self.chat_history)
+        
+        # Add current query with context
+        messages.append(ChatMessage(
+            role=MessageRole.USER,
+            content=f"Context:\n{context}\n\nQuestion: {query}\n\nRemember: If the answer is not fully contained in the context, reply ONLY with 'I don't have enough information to answer this question.'"
+        ))
 
-                        # If still over limit, truncate the summary
-                        if total_tokens > self.token_limit:
-                            excess = total_tokens - self.token_limit
-                            for i, msg in enumerate(messages):
-                                if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
-                                    content = msg.content
-                                    # Truncate summary to fit
-                                    max_summary_tokens = self.count_tokens(content) - excess - 50  # Buffer
-                                    if max_summary_tokens > 100:
-                                        truncated_summary = content
-                                        while self.count_tokens(truncated_summary) > max_summary_tokens and len(truncated_summary) > 200:
-                                            truncate_point = int(len(truncated_summary) * 0.9)
-                                            truncated_summary = truncated_summary[:truncate_point] + "\n[Summary truncated due to length]"
-                                        messages[i] = ChatMessage(
-                                            role=MessageRole.SYSTEM,
-                                            content=truncated_summary
-                                        )
-                                    break
-
-        # Final debug output showing total tokens sent to model
+        # Pipeline Step 3: Final check - if still over token limit after summarization
         final_total_tokens = sum(self.count_tokens(msg.content) for msg in messages)
+        if final_total_tokens > self.token_limit:
+            return [], "The conversation has become too long. Please start a new conversation to continue.", False
+        
         print(f"[MEMORY_DEBUG] Final total tokens sent to model: {final_total_tokens}")
 
-        return messages, None
+        return messages, None, needs_summarization
 
     def add_exchange(self, query: str, response: str) -> None:
         """Add a complete user-assistant exchange to the chat history"""
@@ -367,6 +274,8 @@ class MemoryManager:
         except Exception as e:
             print(f"[MEMORY_DEBUG] Error in model summarization with {api_provider}: {e}")
             return None
+    
+
     
     def clear_history(self) -> None:
         """Clear the chat history"""

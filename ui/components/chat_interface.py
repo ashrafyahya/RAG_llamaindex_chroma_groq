@@ -41,6 +41,7 @@ def initialize_chat_state():
         st.session_state.messages = []
     if "is_thinking" not in st.session_state:
         st.session_state.is_thinking = False
+
     if "user_input" not in st.session_state:
         st.session_state.user_input = None
 
@@ -185,7 +186,7 @@ def show_chat_interface():
             st.session_state.user_input = None
 
             # Debug output for every user message
-            print(f"[CHAT_DEBUG] User sent message: '{prompt}' (length: {len(prompt)} chars)")
+            print(f"[CHAT_DEBUG] User sent message: length: {len(prompt)} chars")
 
             current_time = datetime.now().strftime("%H:%M")
             st.session_state.messages.append({
@@ -225,8 +226,8 @@ def show_chat_interface():
                     api_key_deepseek=st.session_state.api_keys["deepseek"]
                 )
 
-                # Check if the response indicates an error
-                if response.startswith("Your question is too long"):
+                # Check if the response indicates errors from new pipeline
+                if response.startswith("Your question is too long") or response.startswith("The conversation has become too long"):
                     st.error(response)
                     # Remove the user message from the history since it wasn't processed
                     st.session_state.messages.pop()
@@ -265,16 +266,36 @@ def show_chat_interface():
             # Reset thinking state to False
             st.session_state.is_thinking = False
 
-            # Auto-scroll to bottom
+            # Auto-scroll to bottom and refocus input
             st.markdown("""
             <script>
             setTimeout(function() {
+                // Scroll to bottom
                 window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            }, 100);
+                
+                // Refocus the chat input
+                const chatInput = document.querySelector('[data-testid="stChatInput"] input');
+                if (chatInput) {
+                    chatInput.focus();
+                }
+            }, 200);
             </script>
             """, unsafe_allow_html=True)
 
             # Rerun to refresh the UI
             st.rerun()
+
+    # Ensure chat input is focused when page loads or updates
+    if not st.session_state.is_thinking:
+        st.markdown("""
+        <script>
+        setTimeout(function() {
+            const chatInput = document.querySelector('[data-testid="stChatInput"] input');
+            if (chatInput) {
+                chatInput.focus();
+            }
+        }, 100);
+        </script>
+        """, unsafe_allow_html=True)
 
 
