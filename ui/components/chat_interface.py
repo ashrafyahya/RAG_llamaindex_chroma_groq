@@ -130,17 +130,19 @@ def show_chat_interface():
                     # User message on the right - plain text with human icon outside on the right
                     escaped_content = html.escape(content).replace('\n', '<br>')
                     button_id = f"copy_btn_{message_id}"
-                    # Properly escape content for data attribute
-                    data_content = html.escape(content, quote=True)
+                    copy_text_id = f"copy_text_{message_id}"
+                    # Escape content for hidden textarea
+                    data_content = html.escape(content)
                     st.markdown(
                         f"""
                         <div class="chat-message user-message" id="{message_id}">
                             <div class="message-bubble user-bubble">
                                 <div class="message-content-wrapper">
                                     <div class="message-content">{escaped_content}</div>
+                                    <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_content}</textarea>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" id="{button_id}" data-copy-text="{data_content}" title="Copy message">
+                                        <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
                                             📋
                                         </button>
                                     </div>
@@ -155,8 +157,9 @@ def show_chat_interface():
                     # Assistant message on the left - with markdown support and robot icon outside on the left
                     html_content = markdown_to_html(content)
                     button_id = f"copy_btn_{message_id}"
-                    # Properly escape content for data attribute
-                    data_content = html.escape(content, quote=True)
+                    copy_text_id = f"copy_text_{message_id}"
+                    # Escape content for hidden textarea
+                    data_content = html.escape(content)
                     st.markdown(
                         f"""
                         <div class="chat-message assistant-message" id="{message_id}">
@@ -164,9 +167,10 @@ def show_chat_interface():
                             <div class="message-bubble assistant-bubble">
                                 <div class="message-content-wrapper">
                                     <div class="message-content">{html_content}</div>
+                                    <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_content}</textarea>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" id="{button_id}" data-copy-text="{data_content}" title="Copy message">
+                                        <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
                                             📋
                                         </button>
                                     </div>
@@ -196,8 +200,16 @@ def show_chat_interface():
                     // Add click event listener
                     newButton.addEventListener('click', function(e) {
                         e.preventDefault();
-                        const text = this.getAttribute('data-copy-text');
+                        const targetId = this.getAttribute('data-copy-target');
+                        const textElement = doc.getElementById(targetId);
                         const buttonId = this.id;
+                        
+                        if (!textElement) {
+                            console.error('Copy target element not found:', targetId);
+                            return;
+                        }
+                        
+                        const text = textElement.value;
                         
                         // Use modern Clipboard API if available
                         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -288,16 +300,18 @@ def show_chat_interface():
             escaped_prompt = html.escape(prompt).replace('\n', '<br>')
             user_msg_id = f"msg_user_{len(st.session_state.messages)}"
             button_id = f"copy_btn_{user_msg_id}"
-            data_prompt = html.escape(prompt, quote=True)
+            copy_text_id = f"copy_text_{user_msg_id}"
+            data_prompt = html.escape(prompt)
             st.markdown(
                 f"""
                 <div class="chat-message user-message" id="{user_msg_id}">
                     <div class="message-bubble user-bubble">
                         <div class="message-content-wrapper">
                             <div class="message-content">{escaped_prompt}</div>
+                            <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_prompt}</textarea>
                             <div class="message-footer">
                                 <span class="message-timestamp">{current_time}</span>
-                                <button class="copy-button" id="{button_id}" data-copy-text="{data_prompt}" title="Copy message">
+                                <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
                                     📋
                                 </button>
                             </div>
@@ -334,7 +348,8 @@ def show_chat_interface():
             html_response = markdown_to_html(response)
             assistant_msg_id = f"msg_assistant_{len(st.session_state.messages) + 1}"
             button_id = f"copy_btn_{assistant_msg_id}"
-            data_response = html.escape(response, quote=True)
+            copy_text_id = f"copy_text_{assistant_msg_id}"
+            data_response = html.escape(response)
             st.markdown(
                 f"""
                 <div class="chat-message assistant-message" id="{assistant_msg_id}">
@@ -342,9 +357,10 @@ def show_chat_interface():
                     <div class="message-bubble assistant-bubble">
                         <div class="message-content-wrapper">
                             <div class="message-content">{html_response}</div>
+                            <textarea id="{copy_text_id}" class="copy-text-storage" style="display: none;">{data_response}</textarea>
                             <div class="message-footer">
                                 <span class="message-timestamp">{response_time}</span>
-                                <button class="copy-button" id="{button_id}" data-copy-text="{data_response}" title="Copy message">
+                                <button class="copy-button" id="{button_id}" data-copy-target="{copy_text_id}" title="Copy message">
                                     📋
                                 </button>
                             </div>
@@ -379,8 +395,16 @@ def show_chat_interface():
                         
                         button.addEventListener('click', function(e) {
                             e.preventDefault();
-                            const text = this.getAttribute('data-copy-text');
+                            const targetId = this.getAttribute('data-copy-target');
+                            const textElement = doc.getElementById(targetId);
                             const buttonId = this.id;
+                            
+                            if (!textElement) {
+                                console.error('Copy target element not found:', targetId);
+                                return;
+                            }
+                            
+                            const text = textElement.value;
                             
                             if (navigator.clipboard && navigator.clipboard.writeText) {
                                 navigator.clipboard.writeText(text).then(function() {
