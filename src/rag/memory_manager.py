@@ -7,8 +7,10 @@ from typing import Dict, List, Optional, Tuple
 
 import tiktoken
 from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.llms.groq import Groq as LlamaGroq
 
-from src.config import (QUESTION_THRESHOLD, RECENT_MESSAGES_LIMIT,
+from src.api_keys import APIKeyManager
+from src.config import (MODEL_NAME, QUESTION_THRESHOLD, RECENT_MESSAGES_LIMIT,
                         SUMMARIZE_THRESHOLD, TOKEN_LIMIT)
 
 
@@ -26,6 +28,23 @@ class MemoryManager:
 
         # Initialize chat history
         self.chat_history: List[ChatMessage] = []
+        
+        # Summarization prompt
+        self.summarization_prompt = """
+        You are an expert at summarizing conversations. Create a concise summary of the following chat conversation between a User and an AI Assistant.
+
+        Requirements:
+        - Capture the main topics discussed
+        - Include key questions asked and answers provided
+        - Maintain the conversational flow and context
+        - Keep it concise but informative (aim for 50-200 words)
+        - Focus on information that would be useful for future conversation context
+        - Use clear, professional language
+
+        Chat conversation to summarize:
+        {conversation}
+
+        Provide a clear and concise summary:"""
 
     def count_tokens(self, text: str) -> int:
         """Count the number of tokens in a text string"""
@@ -55,16 +74,29 @@ class MemoryManager:
         end = min(len(self.chat_history), end_idx)
         return self.chat_history[start:end]
 
-    def summarize_messages(self, messages: List[ChatMessage]) -> str:
-        """Summarize a list of chat messages"""
+    def summarize_messages(self, messages: List[ChatMessage], api_provider: str = "groq", 
+                          api_key_groq: Optional[str] = None, api_key_openai: Optional[str] = None,
+                          api_key_gemini: Optional[str] = None, api_key_deepseek: Optional[str] = None) -> str:
+        """Summarize a list of chat messages using LLM"""
         # Format messages for summarization
         formatted_messages = []
         for msg in messages:
             role = "User" if msg.role == MessageRole.USER else "Assistant"
             formatted_messages.append(f"{role}: {msg.content}")
 
-        # Create a simple summary (in a real implementation, this would use an LLM)
-        # For now, we'll create a basic summary
+        conversation_text = "\n".join(formatted_messages)
+        
+        # Try to get model-based summary using selected provider
+        try:
+            summary = self._summarize_with_model(conversation_text, api_provider, 
+                                                api_key_groq, api_key_openai, 
+                                                api_key_gemini, api_key_deepseek)
+            if summary:
+                return f"Previous conversation summary:\n{summary}"
+        except Exception as e:
+            print(f"[MEMORY_DEBUG] Model summarization failed: {e}")
+        
+        # Fallback to simple summary if model fails
         summary = "Previous conversation summary:\n"
         
         # Include all messages but truncate if too long
@@ -92,7 +124,12 @@ class MemoryManager:
         self,
         query: str,
         system_prompt: str,
-        context: str
+        context: str,
+        api_provider: str = "groq",
+        api_key_groq: Optional[str] = None,
+        api_key_openai: Optional[str] = None,
+        api_key_gemini: Optional[str] = None,
+        api_key_deepseek: Optional[str] = None
     ) -> Tuple[List[ChatMessage], Optional[str]]:
         """
         Prepare the context for the LLM query
@@ -133,7 +170,9 @@ class MemoryManager:
             if len(self.chat_history) > self.recent_messages_limit:
                 older_messages = self.get_older_messages(3, 15)  # Messages 4-15
                 if older_messages:
-                    summary = self.summarize_messages(older_messages)
+                    summary = self.summarize_messages(older_messages, api_provider, 
+                                                    api_key_groq, api_key_openai, 
+                                                    api_key_gemini, api_key_deepseek)
                     messages.append(
                         ChatMessage(
                             role=MessageRole.SYSTEM,
@@ -189,7 +228,9 @@ class MemoryManager:
                 # Get messages beyond the first 15
                 very_old_messages = self.get_older_messages(15, len(self.chat_history))
                 if very_old_messages:
-                    summary = self.summarize_messages(very_old_messages)
+                    summary = self.summarize_messages(very_old_messages, api_provider, 
+                                                    api_key_groq, api_key_openai, 
+                                                    api_key_gemini, api_key_deepseek)
                     # Find and replace the existing summary
                     for i, msg in enumerate(messages):
                         if msg.role == MessageRole.SYSTEM and "Previous conversation summary" in msg.content:
@@ -211,7 +252,9 @@ class MemoryManager:
                     # Summarize all messages beyond the recent ones (4 to end)
                     all_older_messages = self.get_older_messages(self.recent_messages_limit, len(self.chat_history))
                     if all_older_messages:
-                        summary = self.summarize_messages(all_older_messages)
+                        summary = self.summarize_messages(all_older_messages, api_provider, 
+                                                        api_key_groq, api_key_openai, 
+                                                        api_key_gemini, api_key_deepseek)
                         # Replace any existing summary or add new one
                         summary_found = False
                         for i, msg in enumerate(messages):
@@ -264,6 +307,67 @@ class MemoryManager:
         self.add_message(MessageRole.USER, query)
         self.add_message(MessageRole.ASSISTANT, response)
 
+    def _summarize_with_model(self, conversation_text: str, api_provider: str = "groq",
+                             api_key_groq: Optional[str] = None, api_key_openai: Optional[str] = None,
+                             api_key_gemini: Optional[str] = None, api_key_deepseek: Optional[str] = None) -> Optional[str]:
+        """Use LLM to create a high-quality summary of the conversation"""
+        prompt = self.summarization_prompt.format(conversation=conversation_text)
+        messages = [ChatMessage(role=MessageRole.USER, content=prompt)]
+        
+        try:
+            if api_provider == "groq":
+                api_key = APIKeyManager.get_groq_key(api_key_groq)
+                if not api_key:
+                    return None
+                llm = LlamaGroq(api_key=api_key, model=MODEL_NAME, temperature=0.1)
+                response = llm.chat(messages)
+                return response.message.content.strip()
+                
+            elif api_provider == "openai":
+                api_key = APIKeyManager.get_openai_key(api_key_openai)
+                if not api_key:
+                    return None
+                from openai import OpenAI
+                client = OpenAI(api_key=api_key)
+                openai_messages = [{"role": "user", "content": prompt}]
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=openai_messages,
+                    temperature=0.1
+                )
+                return response.choices[0].message.content.strip()
+                
+            elif api_provider == "gemini":
+                api_key = APIKeyManager.get_gemini_key(api_key_gemini)
+                if not api_key:
+                    return None
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-pro')
+                response = model.generate_content(prompt)
+                return response.text.strip()
+                
+            elif api_provider == "deepseek":
+                api_key = APIKeyManager.get_deepseek_key(api_key_deepseek)
+                if not api_key:
+                    return None
+                from openai import OpenAI
+                client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+                deepseek_messages = [{"role": "user", "content": prompt}]
+                response = client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=deepseek_messages,
+                    temperature=0.1
+                )
+                return response.choices[0].message.content.strip()
+            else:
+                print(f"[MEMORY_DEBUG] Unknown API provider: {api_provider}")
+                return None
+                
+        except Exception as e:
+            print(f"[MEMORY_DEBUG] Error in model summarization with {api_provider}: {e}")
+            return None
+    
     def clear_history(self) -> None:
         """Clear the chat history"""
         self.chat_history = []

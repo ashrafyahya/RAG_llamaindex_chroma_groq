@@ -106,36 +106,6 @@ def show_chat_header():
 
 def show_chat_interface():
     """Display chat interface"""
-    # Add JavaScript for copy functionality
-    st.markdown("""
-    <script>
-    function copyToClipboard(messageId, text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            // Visual feedback
-            const button = document.querySelector('#' + messageId + ' .copy-button');
-            if (button) {
-                const originalText = button.innerHTML;
-                button.innerHTML = '✓';
-                button.style.opacity = '1';
-                setTimeout(function() {
-                    button.innerHTML = originalText;
-                }, 2000);
-            }
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-        }
-        document.body.removeChild(textarea);
-    }
-    </script>
-    """, unsafe_allow_html=True)
-
     if not st.session_state.show_api_modal:
         if not st.session_state.messages:
             st.header("Chat with the Assistant")
@@ -156,8 +126,6 @@ def show_chat_interface():
                 if role == "user":
                     # User message on the right - plain text with human icon outside on the right
                     escaped_content = html.escape(content).replace('\n', '<br>')
-                    # Escape content for JavaScript (handle quotes and newlines)
-                    js_content = content.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
                     st.markdown(
                         f"""
                         <div class="chat-message user-message" id="{message_id}">
@@ -166,9 +134,6 @@ def show_chat_interface():
                                     <div class="message-content">{escaped_content}</div>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" onclick="copyToClipboard('{message_id}', {repr(js_content)})" title="Copy message">
-                                            📋
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -180,8 +145,6 @@ def show_chat_interface():
                 else:
                     # Assistant message on the left - with markdown support and robot icon outside on the left
                     html_content = markdown_to_html(content)
-                    # Escape content for JavaScript (handle quotes and newlines)
-                    js_content = content.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
                     st.markdown(
                         f"""
                         <div class="chat-message assistant-message" id="{message_id}">
@@ -191,9 +154,6 @@ def show_chat_interface():
                                     <div class="message-content">{html_content}</div>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" onclick="copyToClipboard('{message_id}', {repr(js_content)})" title="Copy message">
-                                            📋
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -237,7 +197,6 @@ def show_chat_interface():
             # Display user message immediately
             escaped_prompt = html.escape(prompt).replace('\n', '<br>')
             user_msg_id = f"msg_user_{len(st.session_state.messages)}"
-            js_prompt = prompt.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
             st.markdown(
                 f"""
                 <div class="chat-message user-message" id="{user_msg_id}">
@@ -246,9 +205,6 @@ def show_chat_interface():
                             <div class="message-content">{escaped_prompt}</div>
                             <div class="message-footer">
                                 <span class="message-timestamp">{current_time}</span>
-                                <button class="copy-button" onclick="copyToClipboard('{user_msg_id}', {repr(js_prompt)})" title="Copy message">
-                                    📋
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -282,7 +238,6 @@ def show_chat_interface():
             response_time = datetime.now().strftime("%H:%M")
             html_response = markdown_to_html(response)
             assistant_msg_id = f"msg_assistant_{len(st.session_state.messages) + 1}"
-            js_response = response.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
             st.markdown(
                 f"""
                 <div class="chat-message assistant-message" id="{assistant_msg_id}">
@@ -292,9 +247,6 @@ def show_chat_interface():
                             <div class="message-content">{html_response}</div>
                             <div class="message-footer">
                                 <span class="message-timestamp">{response_time}</span>
-                                <button class="copy-button" onclick="copyToClipboard('{assistant_msg_id}', {repr(js_response)})" title="Copy message">
-                                    📋
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -324,3 +276,5 @@ def show_chat_interface():
 
             # Rerun to refresh the UI
             st.rerun()
+
+

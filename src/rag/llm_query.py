@@ -9,6 +9,7 @@ from llama_index.llms.groq import Groq as LlamaGroq
 
 from src.api_keys import APIKeyManager
 from src.config import MODEL_NAME, TOKEN_LIMIT
+
 from . import memory_manager
 
 # System prompt for the RAG system
@@ -70,7 +71,8 @@ def query_with_groq(query: str, context: str, api_key: str) -> str:
     llm = LlamaGroq(api_key=api_key, model=MODEL_NAME, temperature=0.0)
 
     # Prepare messages with memory management
-    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context)
+    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
+                                                    api_provider="groq", api_key_groq=api_key)
 
     if error:
         return error
@@ -91,7 +93,8 @@ def query_with_openai(query: str, context: str, api_key: str) -> str:
     client = OpenAI(api_key=api_key)
 
     # Prepare messages with memory management
-    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context)
+    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
+                                                    api_provider="openai", api_key_openai=api_key)
 
     if error:
         return error
@@ -124,7 +127,8 @@ def query_with_gemini(query: str, context: str, api_key: str) -> str:
     model = genai.GenerativeModel('gemini-pro')
 
     # Prepare messages with memory management
-    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context)
+    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
+                                                    api_provider="gemini", api_key_gemini=api_key)
 
     if error:
         return error
@@ -158,7 +162,8 @@ def query_with_deepseek(query: str, context: str, api_key: str) -> str:
     )
 
     # Prepare messages with memory management
-    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context)
+    messages, error = memory_manager.prepare_context(query, SYSTEM_PROMPT, context, 
+                                                    api_provider="deepseek", api_key_deepseek=api_key)
 
     if error:
         return error
