@@ -7,8 +7,10 @@ import sys
 
 import streamlit as st
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add the parent directory and src directory to the path
+parent_dir = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, parent_dir)
+sys.path.insert(0, os.path.join(parent_dir, 'src'))
 
 from ui.components.api_settings_modal import (initialize_api_settings_state,
                                               show_api_settings_modal)
