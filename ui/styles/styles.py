@@ -359,6 +359,40 @@ MODAL_CSS = """
                     inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
         transform: translateY(-1px) !important;
     }
+    
+    /* Fixed chat action buttons */
+    .fixed-chat-actions-container {
+        position: fixed !important;
+        right: 20px !important;
+        top: 100px !important;
+        z-index: 999 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    
+    .fixed-chat-actions-container button,
+    .fixed-chat-actions-container .stDownloadButton > button {
+        background: rgba(30, 41, 59, 0.95) !important;
+        border: 2px solid rgba(251, 146, 60, 0.5) !important;
+        border-radius: 12px !important;
+        padding: 12px 20px !important;
+        color: white !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        min-width: 150px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .fixed-chat-actions-container button:hover,
+    .fixed-chat-actions-container .stDownloadButton > button:hover {
+        background: rgba(45, 55, 72, 0.95) !important;
+        border-color: rgba(251, 146, 60, 0.8) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(251, 146, 60, 0.3) !important;
+    }
+
 </style>
 """
 

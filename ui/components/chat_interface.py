@@ -89,88 +89,27 @@ def show_chat_header():
 
 def show_fixed_chat_actions():
     """Display fixed chat action buttons on the right side"""
-    import streamlit.components.v1 as components
-    import base64
-    
     if st.session_state.messages and not st.session_state.show_api_modal:
-        # Generate PDF data for download
-        pdf_data = generate_chat_pdf()
-        pdf_b64 = base64.b64encode(pdf_data).decode()
+        # Create a special container div with the fixed class
+        st.markdown('<div class="fixed-chat-actions-container">', unsafe_allow_html=True)
         
-        # Render fixed buttons with HTML/CSS
-        components.html(f"""
-        <style>
-            .fixed-chat-actions {{
-                position: fixed;
-                right: 20px;
-                top: 100px;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                z-index: 999;
-            }}
-            
-            .chat-action-btn {{
-                background: rgba(30, 41, 59, 0.95);
-                border: 2px solid rgba(251, 146, 60, 0.5);
-                border-radius: 12px;
-                padding: 12px 20px;
-                color: white;
-                font-size: 14px;
-                font-weight: 500;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                text-decoration: none;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                min-width: 150px;
-                font-family: "Source Sans Pro", sans-serif;
-            }}
-            
-            .chat-action-btn:hover {{
-                background: rgba(45, 55, 72, 0.95);
-                border-color: rgba(251, 146, 60, 0.8);
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(251, 146, 60, 0.3);
-            }}
-            
-            .chat-action-btn:active {{
-                transform: translateY(0);
-            }}
-        </style>
+        # Clear Chat button
+        if st.button("🗑️ Clear Chat", key="fixed_clear_chat", help="Start a new chat by clearing all messages"):
+            st.session_state.messages = []
+            clear_chat_memory()
+            st.rerun()
         
-        <div class="fixed-chat-actions">
-            <button class="chat-action-btn" onclick="clearChat()" title="Start a new chat by clearing all messages">
-                🗑️ Clear Chat
-            </button>
-            <a class="chat-action-btn" href="data:application/pdf;base64,{pdf_b64}" download="chat_history.pdf" title="Download the current chat history as a PDF file">
-                📄 Download
-            </a>
-        </div>
+        # Download button
+        st.download_button(
+            label="📄 Download",
+            data=generate_chat_pdf(),
+            file_name="chat_history.pdf",
+            mime="application/pdf",
+            key="fixed_download_chat",
+            help="Download the current chat history as a PDF file"
+        )
         
-        <script>
-            function clearChat() {{
-                // Try to trigger Streamlit rerun by interacting with the session state
-                // We need to communicate with the parent Streamlit app
-                const parentDoc = window.parent.document;
-                
-                // Try to find and click a Streamlit rerun trigger
-                // This is a workaround - ideally we'd use Streamlit's session state API
-                window.parent.postMessage({{
-                    type: 'streamlit:clearChat',
-                    data: {{}}
-                }}, '*');
-                
-                // Reload the page as a fallback
-                setTimeout(function() {{
-                    window.parent.location.href = window.parent.location.href.split('?')[0] + '?clear_chat=true';
-                }}, 100);
-            }}
-        </script>
-        """, height=0)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def show_chat_interface():
