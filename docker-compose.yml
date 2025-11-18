@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    container_name: agentic-ai-container
+    ports:
+      - "8504:8501"
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./data:/app/data
+      - agentic_ai_cache:/app/.streamlit_cache
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+volumes:
+  agentic_ai_cache:
+    driver: local
