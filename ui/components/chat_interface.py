@@ -179,43 +179,19 @@ def show_chat_interface():
 
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Add JavaScript to attach event listeners to copy buttons
+        # Add JavaScript to attach event listeners to copy buttons using event delegation
         components.html("""
         <script>
         (function() {
-            // Wait for parent document to be ready
-            const attachCopyListeners = function() {
-                const doc = window.parent.document;
-                const copyButtons = doc.querySelectorAll('.copy-button');
-                
-                copyButtons.forEach(function(button) {
-                    // Remove existing listeners to avoid duplicates
-                    const newButton = button.cloneNode(true);
-                    button.parentNode.replaceChild(newButton, button);
-                    
-                    // Add click event listener
-                    newButton.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        const text = this.getAttribute('data-copy-text');
-                        const buttonId = this.id;
-                        
-                        // Use modern Clipboard API if available
-                        if (navigator.clipboard && navigator.clipboard.writeText) {
-                            navigator.clipboard.writeText(text).then(function() {
-                                showFeedback(buttonId);
-                            }).catch(function(err) {
-                                console.error('Failed to copy: ', err);
-                                fallbackCopy(text, buttonId);
-                            });
-                        } else {
-                            fallbackCopy(text, buttonId);
-                        }
-                    });
-                });
-            };
+            const doc = window.parent.document;
+            
+            // Remove any existing listener to avoid duplicates
+            if (window.copyListenerAttached) {
+                return;
+            }
+            window.copyListenerAttached = true;
             
             const fallbackCopy = function(text, buttonId) {
-                const doc = window.parent.document;
                 const textarea = doc.createElement('textarea');
                 textarea.value = text;
                 textarea.style.position = 'fixed';
@@ -235,7 +211,6 @@ def show_chat_interface():
             };
             
             const showFeedback = function(buttonId) {
-                const doc = window.parent.document;
                 const button = doc.getElementById(buttonId);
                 if (button) {
                     const originalText = button.innerHTML;
@@ -248,8 +223,30 @@ def show_chat_interface():
                 }
             };
             
-            // Attach listeners with a slight delay to ensure DOM is ready
-            setTimeout(attachCopyListeners, 100);
+            // Use event delegation on document body to handle all copy button clicks
+            doc.body.addEventListener('click', function(e) {
+                // Check if clicked element is a copy button or inside one
+                const copyButton = e.target.closest('.copy-button');
+                if (copyButton) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const text = copyButton.getAttribute('data-copy-text');
+                    const buttonId = copyButton.id;
+                    
+                    // Use modern Clipboard API if available
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).then(function() {
+                            showFeedback(buttonId);
+                        }).catch(function(err) {
+                            console.error('Failed to copy: ', err);
+                            fallbackCopy(text, buttonId);
+                        });
+                    } else {
+                        fallbackCopy(text, buttonId);
+                    }
+                }
+            });
         })();
         </script>
         """, height=0)
@@ -364,76 +361,6 @@ def show_chat_interface():
 
             # Reset thinking state to False
             st.session_state.is_thinking = False
-            
-            # Attach event listeners to newly added copy buttons
-            components.html("""
-            <script>
-            (function() {
-                const attachCopyListeners = function() {
-                    const doc = window.parent.document;
-                    const copyButtons = doc.querySelectorAll('.copy-button');
-                    
-                    copyButtons.forEach(function(button) {
-                        if (button.dataset.listenerAttached) return;
-                        button.dataset.listenerAttached = 'true';
-                        
-                        button.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            const text = this.getAttribute('data-copy-text');
-                            const buttonId = this.id;
-                            
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(text).then(function() {
-                                    showFeedback(buttonId);
-                                }).catch(function(err) {
-                                    console.error('Failed to copy: ', err);
-                                    fallbackCopy(text, buttonId);
-                                });
-                            } else {
-                                fallbackCopy(text, buttonId);
-                            }
-                        });
-                    });
-                };
-                
-                const fallbackCopy = function(text, buttonId) {
-                    const doc = window.parent.document;
-                    const textarea = doc.createElement('textarea');
-                    textarea.value = text;
-                    textarea.style.position = 'fixed';
-                    textarea.style.top = '0';
-                    textarea.style.left = '0';
-                    textarea.style.opacity = '0';
-                    doc.body.appendChild(textarea);
-                    textarea.focus();
-                    textarea.select();
-                    try {
-                        doc.execCommand('copy');
-                        showFeedback(buttonId);
-                    } catch (err) {
-                        console.error('Fallback copy failed: ', err);
-                    }
-                    doc.body.removeChild(textarea);
-                };
-                
-                const showFeedback = function(buttonId) {
-                    const doc = window.parent.document;
-                    const button = doc.getElementById(buttonId);
-                    if (button) {
-                        const originalText = button.innerHTML;
-                        button.innerHTML = '✓';
-                        button.style.opacity = '1';
-                        setTimeout(function() {
-                            button.innerHTML = originalText;
-                            button.style.opacity = '0.6';
-                        }, 2000);
-                    }
-                };
-                
-                setTimeout(attachCopyListeners, 100);
-            })();
-            </script>
-            """, height=0)
 
             # Auto-scroll to bottom and refocus input
             st.markdown("""
