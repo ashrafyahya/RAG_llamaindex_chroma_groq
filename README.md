@@ -133,3 +133,19 @@ Planned improvements (see TODO.md):
 - **Security**: Cryptography library for key encryption
 - **Memory Management**: Custom token counting and summarization
 - **Relevance Filtering**: Distance-based threshold (0.7) to ensure quality responses
+
+
+## Notes & Disclaimers
+
+- Learning project: This is for learning and experimentation, not production use.
+  
+- Multi-tenant considerations: If hosting, separate databases per user/tenant.
+- Secure database: Use a hardened, access-controlled database for any deployment.
+- Streamlit in production: Streamlit is good for demos/learning; not ideal for production-grade apps.
+
+- Limited testing: Developed and tested by one person; you may encounter bugs.
+- Open to all: Learn from it, use it, and adapt it to your needs.
+- Contact: Questions? Reach out on LinkedIn — https://www.linkedin.com/in/ashrafyahya/
+
+
+- More details: See `social/DOCUMENTATION.md` file for deeper project notes.
