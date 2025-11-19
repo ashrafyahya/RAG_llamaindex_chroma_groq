@@ -40,12 +40,13 @@ def query_documents(
     """
     results = rag_system.search_documents(query, n_results)
     
-    # Check document similarity scores
-    similarities = results.get("distances", [[]])[0]
-    if similarities:
-        print(f"Best similarity score: {min(similarities)}")
+    # Check document distance scores (lower distance = more similar)
+    distances = results.get("distances", [[]])[0]
+    if distances:
+        print(f"Best distance score: {min(distances):.4f} (lower = more similar)")
     
-    if not similarities or min(similarities) < 0.70:
+    # Filter out results if distance is too high (less similar)
+    if not distances or min(distances) > 0.7:
         return "I don't have enough information to answer this question."
     
     # Format context from search results

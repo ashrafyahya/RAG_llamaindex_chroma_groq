@@ -4,10 +4,18 @@ Orchestrates RAG operations: document loading, querying, and management
 """
 import os
 import tempfile
+from pathlib import Path
 from typing import Dict, List
 
 from llama_index.core import Settings, SimpleDirectoryReader
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+try:
+    from llama_index.readers.file import PyMuPDFReader
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    print("Warning: PyMuPDFReader not available. Using default PDF reader.")
 
 from chroma_search import ChromaEmbeddingSearch
 from chroma_setup import setup_chroma
@@ -34,13 +42,24 @@ class RAGSystem:
         """
         Load documents from the data directory into the database.
         Checks for existing documents to avoid duplicates.
+        Uses PyMuPDFReader for PDFs to preserve layout and tables.
         
         Note:
             Documents are loaded from a 'data' directory relative to the project structure.
             Only processes new documents if the collection is empty.
         """
         data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-        documents = SimpleDirectoryReader(data_path).load_data()
+        
+        # Configure file extractor for better PDF handling
+        file_extractor = {}
+        if PYMUPDF_AVAILABLE:
+            file_extractor['.pdf'] = PyMuPDFReader()
+            print("Using PyMuPDFReader for enhanced PDF processing")
+        
+        documents = SimpleDirectoryReader(
+            data_path,
+            file_extractor=file_extractor if file_extractor else None
+        ).load_data()
 
         # Prevent duplicate document insertion
         existing_docs = self.search.collection.get(include=["documents"])["documents"]
@@ -101,6 +120,7 @@ class RAGSystem:
     def upload_document(self, uploaded_file) -> str:
         """
         Upload and index a document file for searching.
+        Uses PyMuPDFReader for PDFs to preserve layout and table structure.
         
         Args:
             uploaded_file: File object from Streamlit file uploader
@@ -110,7 +130,7 @@ class RAGSystem:
             
         Note:
             Prevents duplicate uploads by checking existing document names.
-            Supports various file formats through SimpleDirectoryReader.
+            Supports .txt, .pdf, .docx, .md, .html with enhanced PDF processing.
         """
         try:
             existing_docs = self.get_uploaded_documents()
@@ -122,7 +142,15 @@ class RAGSystem:
                 temp_file.write(uploaded_file.getvalue())
                 temp_file_path = temp_file.name
 
-            documents = SimpleDirectoryReader(input_files=[temp_file_path]).load_data()
+            # Use enhanced PDF reader if available
+            file_extractor = {}
+            if PYMUPDF_AVAILABLE and uploaded_file.name.lower().endswith('.pdf'):
+                file_extractor['.pdf'] = PyMuPDFReader()
+
+            documents = SimpleDirectoryReader(
+                input_files=[temp_file_path],
+                file_extractor=file_extractor if file_extractor else None
+            ).load_data()
 
             for doc in documents:
                 doc_id = f"{uploaded_file.name}_{hash(doc.text)}"
