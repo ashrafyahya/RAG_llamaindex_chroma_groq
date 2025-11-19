@@ -126,9 +126,10 @@ Planned improvements (see TODO.md):
 ## Technologies
 
 - **Frontend**: Streamlit with custom CSS styling
-- **Vector Database**: ChromaDB with cosine similarity
+- **Vector Database**: ChromaDB with cosine distance metric
 - **Embeddings**: HuggingFace BGE-small-en-v1.5
 - **LLM Integration**: Multiple provider APIs
-- **Document Processing**: LlamaIndex SimpleDirectoryReader
+- **Document Processing**: LlamaIndex with PyMuPDFReader for enhanced PDF handling
 - **Security**: Cryptography library for key encryption
 - **Memory Management**: Custom token counting and summarization
+- **Relevance Filtering**: Distance-based threshold (0.7) to ensure quality responses
