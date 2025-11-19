@@ -1,0 +1,34 @@
+/* Document Management Styles */
+.document-management {
+  padding: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.documents-list {
+  margin-top: 24px;
+}
+
+.documents-list h3 {
+  margin-bottom: 16px;
+  color: var(--ion-color-primary);
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  padding: 40px;
+}

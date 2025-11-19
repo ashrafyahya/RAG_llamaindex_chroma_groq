@@ -1,0 +1,19 @@
+# Core RAG dependencies
+llama-index
+llama-index-embeddings-huggingface
+llama-index-llms-groq
+chromadb
+groq
+openai
+google-generativeai
+cryptography
+tiktoken
+
+# FastAPI and server dependencies
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+
+# PDF generation (for chat history export)
+fpdf

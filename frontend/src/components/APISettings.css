@@ -1,0 +1,47 @@
+/* API Settings Styles */
+.api-settings {
+  padding: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.provider-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-selection ion-label {
+  margin-bottom: 8px;
+}
+
+.api-keys-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.api-key-input {
+  width: 100%;
+}
+
+.get-key-link {
+  margin-left: 8px;
+  color: var(--ion-color-primary);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.get-key-link:hover {
+  text-decoration: underline;
+}
+
+.actions {
+  margin-top: 16px;
+}
