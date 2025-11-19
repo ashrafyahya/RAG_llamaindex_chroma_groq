@@ -133,8 +133,9 @@ The RAG system combines vector similarity search with LLM generation to provide 
    - System prompt with strict retrieval guidelines
 
 **Quality Control:**
-- Similarity threshold: 0.70 (70%)
-- If documents don't meet the threshold, returns: "I don't have enough information to answer this question."
+- **Distance threshold: 0.7** (ChromaDB uses cosine distance where lower = more similar)
+- Documents with distance > 0.7 are rejected as not relevant enough
+- If documents exceed the threshold, returns: "I don't have enough information to answer this question."
 - System prompt enforces strict adherence to provided context only
 
 ---
@@ -150,7 +151,7 @@ The system uses ChromaDB as the vector database for storing and retrieving docum
 ```
 Database Location: ./chroma_db/
 Collection Name: document_embeddings
-Similarity Metric: Cosine Similarity
+Distance Metric: Cosine Distance (lower = more similar)
 Embedding Model: BAAI/bge-small-en-v1.5
 Embedding Dimension: 384
 ```
@@ -185,11 +186,12 @@ ChromaDB Collection
 ```
 Query Text → Embedding Model → Query Vector (384-dim)
                                       ↓
-                        ChromaDB Cosine Similarity Search
+                        ChromaDB Cosine Distance Search
                                       ↓
-                        Top N Results with Distances
+                        Top N Results with Distance Scores
                                       ↓
-                        Filter by Similarity Threshold (0.70)
+                        Filter by Distance Threshold (> 0.7 rejected)
+                        (Lower distance = more similar)
                                       ↓
                         Format Results for LLM
 ```
@@ -529,12 +531,19 @@ The system uses a single active provider at a time:
 
 ### Supported File Formats
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| **Text** | .txt | Plain text files |
-| **PDF** | .pdf | Adobe PDF documents |
-| **Word** | .docx | Microsoft Word documents |
-| **Markdown** | .md | Markdown formatted text |
+| Format | Extension | Description | Layout Support |
+|--------|-----------|-------------|----------------|
+| **Text** | .txt | Plain text files | N/A |
+| **PDF** | .pdf | Adobe PDF documents | **Enhanced** - Preserves layout, tables, columns |
+| **Word** | .docx | Microsoft Word documents | Basic |
+| **Markdown** | .md | Markdown formatted text | N/A |
+| **HTML** | .html | HTML web pages | Basic |
+
+**PDF Processing**: The system uses PyMuPDFReader for advanced PDF processing, which:
+- Preserves document layout and formatting
+- Extracts tables with structure intact
+- Handles multi-column layouts correctly
+- Maintains text positioning and flow
 
 ### Document Upload Process
 
