@@ -3,9 +3,11 @@ LLM Query Module
 Handles LLM provider selection and query processing
 """
 from typing import Optional
+import time
 
 from llama_index.core.llms import MessageRole
 from llama_index.llms.groq import Groq as LlamaGroq
+from openai import InternalServerError, APIError, APIConnectionError, RateLimitError
 
 from src.api_keys import APIKeyManager
 from src.config import MODEL_NAME
@@ -66,14 +68,15 @@ Defense Layer:
 """
 
 
-def query_with_groq(query: str, context: str, api_key: str) -> str:
+def query_with_groq(query: str, context: str, api_key: str, max_retries: int = 2) -> str:
     """
-    Process a query using the Groq LLM API.
+    Process a query using the Groq LLM API with retry logic.
     
     Args:
         query (str): User's question
         context (str): Retrieved document context
         api_key (str): Groq API key
+        max_retries (int): Maximum number of retry attempts
         
     Returns:
         str: Generated response or error message
@@ -86,21 +89,44 @@ def query_with_groq(query: str, context: str, api_key: str) -> str:
     if error:
         return error
 
-    response = llm.chat(messages)
-    answer = response.message.content
+    # Retry logic for handling transient errors
+    for attempt in range(max_retries + 1):
+        try:
+            response = llm.chat(messages)
+            answer = response.message.content
+            memory_manager.add_exchange(query, answer)
+            return answer
+        except InternalServerError as e:
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                print(f"Groq API returned 500 error. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                return ("⚠️ The Groq API is currently experiencing issues (HTTP 500 Internal Server Error). "
+                       "This is a temporary server-side problem. Please try one of the following:\n\n"
+                       "1. Wait a few moments and try again\n"
+                       "2. Switch to another LLM provider (OpenAI, Gemini, or Deepseek) in API Settings\n"
+                       "3. Check Groq's status page for updates")
+        except RateLimitError:
+            return ("⚠️ Rate limit exceeded for Groq API. Please wait a moment before trying again, "
+                   "or switch to another LLM provider in API Settings.")
+        except APIConnectionError:
+            return ("⚠️ Failed to connect to Groq API. Please check your internet connection and try again.")
+        except APIError as e:
+            return f"⚠️ Groq API error: {str(e)}. Please try again or switch to another provider in API Settings."
+        except Exception as e:
+            return f"⚠️ Unexpected error with Groq: {str(e)}"
 
-    memory_manager.add_exchange(query, answer)
-    return answer
 
-
-def query_with_openai(query: str, context: str, api_key: str) -> str:
+def query_with_openai(query: str, context: str, api_key: str, max_retries: int = 2) -> str:
     """
-    Process a query using the OpenAI GPT API.
+    Process a query using the OpenAI GPT API with retry logic.
     
     Args:
         query (str): User's question
         context (str): Retrieved document context
         api_key (str): OpenAI API key
+        max_retries (int): Maximum number of retry attempts
         
     Returns:
         str: Generated response or error message
@@ -114,38 +140,60 @@ def query_with_openai(query: str, context: str, api_key: str) -> str:
 
     if error:
         return error
+    
     openai_messages = []
     for msg in messages:
         role = "system" if msg.role == MessageRole.SYSTEM else ("user" if msg.role == MessageRole.USER else "assistant")
         openai_messages.append({"role": role, "content": msg.content})
 
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=openai_messages,
-        temperature=0.0
-    )
+    # Retry logic for handling transient errors
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=openai_messages,
+                temperature=0.0
+            )
+            answer = response.choices[0].message.content
+            memory_manager.add_exchange(query, answer)
+            return answer
+        except InternalServerError as e:
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                print(f"OpenAI API returned 500 error. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                return ("⚠️ The OpenAI API is currently experiencing issues (HTTP 500 Internal Server Error). "
+                       "This is a temporary server-side problem. Please try one of the following:\n\n"
+                       "1. Wait a few moments and try again\n"
+                       "2. Switch to another LLM provider (Groq, Gemini, or Deepseek) in API Settings\n"
+                       "3. Check OpenAI's status page for updates")
+        except RateLimitError:
+            return ("⚠️ Rate limit exceeded for OpenAI API. Please wait a moment before trying again, "
+                   "or switch to another LLM provider in API Settings.")
+        except APIConnectionError:
+            return ("⚠️ Failed to connect to OpenAI API. Please check your internet connection and try again.")
+        except APIError as e:
+            return f"⚠️ OpenAI API error: {str(e)}. Please try again or switch to another provider in API Settings."
+        except Exception as e:
+            return f"⚠️ Unexpected error with OpenAI: {str(e)}"
 
-    answer = response.choices[0].message.content
 
-    # Store in memory
-    memory_manager.add_exchange(query, answer)
-
-    return answer
-
-
-def query_with_gemini(query: str, context: str, api_key: str) -> str:
+def query_with_gemini(query: str, context: str, api_key: str, max_retries: int = 2) -> str:
     """
-    Process a query using the Google Gemini API.
+    Process a query using the Google Gemini API with retry logic.
     
     Args:
         query (str): User's question
         context (str): Retrieved document context
         api_key (str): Gemini API key
+        max_retries (int): Maximum number of retry attempts
         
     Returns:
         str: Generated response or error message
     """
     import google.generativeai as genai
+    from google.api_core import exceptions as google_exceptions
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-pro')
@@ -166,23 +214,48 @@ def query_with_gemini(query: str, context: str, api_key: str) -> str:
         else:  # Assistant
             gemini_prompt += f"Assistant: {msg.content}\n\n"
 
-    response = model.generate_content(gemini_prompt)
-    answer = response.text
+    # Retry logic for handling transient errors
+    for attempt in range(max_retries + 1):
+        try:
+            response = model.generate_content(gemini_prompt)
+            answer = response.text
+            memory_manager.add_exchange(query, answer)
+            return answer
+        except google_exceptions.InternalServerError as e:
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                print(f"Gemini API returned 500 error. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                return ("⚠️ The Gemini API is currently experiencing issues (HTTP 500 Internal Server Error). "
+                       "This is a temporary server-side problem. Please try one of the following:\n\n"
+                       "1. Wait a few moments and try again\n"
+                       "2. Switch to another LLM provider (Groq, OpenAI, or Deepseek) in API Settings\n"
+                       "3. Check Google's status page for updates")
+        except google_exceptions.ResourceExhausted:
+            return ("⚠️ Rate limit exceeded for Gemini API. Please wait a moment before trying again, "
+                   "or switch to another LLM provider in API Settings.")
+        except google_exceptions.ServiceUnavailable as e:
+            if attempt < max_retries:
+                wait_time = 2 ** attempt
+                print(f"Gemini API unavailable. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                return ("⚠️ Gemini API is currently unavailable. Please try again later or "
+                       "switch to another LLM provider in API Settings.")
+        except Exception as e:
+            return f"⚠️ Unexpected error with Gemini: {str(e)}"
 
-    # Store in memory
-    memory_manager.add_exchange(query, answer)
 
-    return answer
-
-
-def query_with_deepseek(query: str, context: str, api_key: str) -> str:
+def query_with_deepseek(query: str, context: str, api_key: str, max_retries: int = 2) -> str:
     """
-    Process a query using the Deepseek API.
+    Process a query using the Deepseek API with retry logic.
     
     Args:
         query (str): User's question
         context (str): Retrieved document context
         api_key (str): Deepseek API key
+        max_retries (int): Maximum number of retry attempts
         
     Returns:
         str: Generated response or error message
@@ -206,18 +279,37 @@ def query_with_deepseek(query: str, context: str, api_key: str) -> str:
         role = "system" if msg.role == MessageRole.SYSTEM else ("user" if msg.role == MessageRole.USER else "assistant")
         deepseek_messages.append({"role": role, "content": msg.content})
 
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=deepseek_messages,
-        temperature=0.0
-    )
-
-    answer = response.choices[0].message.content
-
-    # Store in memory
-    memory_manager.add_exchange(query, answer)
-
-    return answer
+    # Retry logic for handling transient errors
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=deepseek_messages,
+                temperature=0.0
+            )
+            answer = response.choices[0].message.content
+            memory_manager.add_exchange(query, answer)
+            return answer
+        except InternalServerError as e:
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                print(f"Deepseek API returned 500 error. Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                return ("⚠️ The Deepseek API is currently experiencing issues (HTTP 500 Internal Server Error). "
+                       "This is a temporary server-side problem. Please try one of the following:\n\n"
+                       "1. Wait a few moments and try again\n"
+                       "2. Switch to another LLM provider (Groq, OpenAI, or Gemini) in API Settings\n"
+                       "3. Check Deepseek's status page for updates")
+        except RateLimitError:
+            return ("⚠️ Rate limit exceeded for Deepseek API. Please wait a moment before trying again, "
+                   "or switch to another LLM provider in API Settings.")
+        except APIConnectionError:
+            return ("⚠️ Failed to connect to Deepseek API. Please check your internet connection and try again.")
+        except APIError as e:
+            return f"⚠️ Deepseek API error: {str(e)}. Please try again or switch to another provider in API Settings."
+        except Exception as e:
+            return f"⚠️ Unexpected error with Deepseek: {str(e)}"
 
 
 def process_query(
@@ -253,37 +345,25 @@ def process_query(
         api_key = APIKeyManager.get_groq_key(api_key_groq)
         if not api_key:
             return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
-        try:
-            return query_with_groq(query, context, api_key)
-        except Exception as e:
-            return f"Error: Failed to get response from Groq: {str(e)}"
+        return query_with_groq(query, context, api_key)
 
     elif api_provider == "openai":
         api_key = APIKeyManager.get_openai_key(api_key_openai)
         if not api_key:
             return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
-        try:
-            return query_with_openai(query, context, api_key)
-        except Exception as e:
-            return f"Error: Failed to get response from OpenAI: {str(e)}"
+        return query_with_openai(query, context, api_key)
 
     elif api_provider == "gemini":
         api_key = APIKeyManager.get_gemini_key(api_key_gemini)
         if not api_key:
             return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
-        try:
-            return query_with_gemini(query, context, api_key)
-        except Exception as e:
-            return f"Error: Failed to get response from Gemini: {str(e)}"
+        return query_with_gemini(query, context, api_key)
 
     elif api_provider == "deepseek":
         api_key = APIKeyManager.get_deepseek_key(api_key_deepseek)
         if not api_key:
             return f"Error: {api_provider.upper()} API key not configured. Please provide your API key in the API Settings."
-        try:
-            return query_with_deepseek(query, context, api_key)
-        except Exception as e:
-            return f"Error: Failed to get response from Deepseek: {str(e)}"
+        return query_with_deepseek(query, context, api_key)
 
     else:
         return f"Error: Unknown API provider '{api_provider}'. Please select a valid provider."
