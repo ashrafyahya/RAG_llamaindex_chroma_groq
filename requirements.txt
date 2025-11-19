@@ -1,12 +1,20 @@
-# Core dependencies
+# Core dependencies (deprecated - use backend/requirements.txt)
+# This file is kept for backward compatibility
+# For new installations, use:
+#   - backend/requirements.txt for the FastAPI backend
+#   - frontend/package.json for the React Ionic frontend
+
 llama-index
 llama-index-embeddings-huggingface
 llama-index-llms-groq
 chromadb
 groq
 fpdf
-streamlit
 openai
 google-generativeai
 cryptography
 tiktoken
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
