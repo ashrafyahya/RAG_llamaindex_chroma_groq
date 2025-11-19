@@ -130,8 +130,6 @@ def show_chat_interface():
                     # User message on the right - plain text with human icon outside on the right
                     escaped_content = html.escape(content).replace('\n', '<br>')
                     button_id = f"copy_btn_{message_id}"
-                    # Properly escape content for data attribute
-                    data_content = html.escape(content, quote=True)
                     st.markdown(
                         f"""
                         <div class="chat-message user-message" id="{message_id}">
@@ -140,7 +138,7 @@ def show_chat_interface():
                                     <div class="message-content">{escaped_content}</div>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" id="{button_id}" data-copy-text="{data_content}" title="Copy message">
+                                        <button class="copy-button" id="{button_id}" data-message-id="{message_id}" title="Copy message">
                                             📋
                                         </button>
                                     </div>
@@ -155,8 +153,6 @@ def show_chat_interface():
                     # Assistant message on the left - with markdown support and robot icon outside on the left
                     html_content = markdown_to_html(content)
                     button_id = f"copy_btn_{message_id}"
-                    # Properly escape content for data attribute
-                    data_content = html.escape(content, quote=True)
                     st.markdown(
                         f"""
                         <div class="chat-message assistant-message" id="{message_id}">
@@ -166,7 +162,7 @@ def show_chat_interface():
                                     <div class="message-content">{html_content}</div>
                                     <div class="message-footer">
                                         <span class="message-timestamp">{timestamp}</span>
-                                        <button class="copy-button" id="{button_id}" data-copy-text="{data_content}" title="Copy message">
+                                        <button class="copy-button" id="{button_id}" data-message-id="{message_id}" title="Copy message">
                                             📋
                                         </button>
                                     </div>
@@ -179,43 +175,32 @@ def show_chat_interface():
 
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Add JavaScript to attach event listeners to copy buttons
-        components.html("""
+        # Create a JSON object with message texts for JavaScript
+        import json
+        messages_data = {f"msg_{idx}": message["content"] for idx, message in enumerate(st.session_state.messages)}
+        messages_json = json.dumps(messages_data)
+        
+        # Add JavaScript to attach event listeners to copy buttons using event delegation
+        components.html(f"""
         <script>
-        (function() {
-            // Wait for parent document to be ready
-            const attachCopyListeners = function() {
-                const doc = window.parent.document;
-                const copyButtons = doc.querySelectorAll('.copy-button');
-                
-                copyButtons.forEach(function(button) {
-                    // Remove existing listeners to avoid duplicates
-                    const newButton = button.cloneNode(true);
-                    button.parentNode.replaceChild(newButton, button);
-                    
-                    // Add click event listener
-                    newButton.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        const text = this.getAttribute('data-copy-text');
-                        const buttonId = this.id;
-                        
-                        // Use modern Clipboard API if available
-                        if (navigator.clipboard && navigator.clipboard.writeText) {
-                            navigator.clipboard.writeText(text).then(function() {
-                                showFeedback(buttonId);
-                            }).catch(function(err) {
-                                console.error('Failed to copy: ', err);
-                                fallbackCopy(text, buttonId);
-                            });
-                        } else {
-                            fallbackCopy(text, buttonId);
-                        }
-                    });
-                });
-            };
+        (function() {{
+            const doc = window.parent.document;
             
-            const fallbackCopy = function(text, buttonId) {
-                const doc = window.parent.document;
+            // Store message texts in a global object
+            if (!window.messageTexts) {{
+                window.messageTexts = {messages_json};
+            }} else {{
+                // Update existing object
+                Object.assign(window.messageTexts, {messages_json});
+            }}
+            
+            // Remove any existing listener to avoid duplicates
+            if (window.copyListenerAttached) {{
+                return;
+            }}
+            window.copyListenerAttached = true;
+            
+            const fallbackCopy = function(text, buttonId) {{
                 const textarea = doc.createElement('textarea');
                 textarea.value = text;
                 textarea.style.position = 'fixed';
@@ -225,32 +210,60 @@ def show_chat_interface():
                 doc.body.appendChild(textarea);
                 textarea.focus();
                 textarea.select();
-                try {
+                try {{
                     doc.execCommand('copy');
                     showFeedback(buttonId);
-                } catch (err) {
+                }} catch (err) {{
                     console.error('Fallback copy failed: ', err);
-                }
+                }}
                 doc.body.removeChild(textarea);
-            };
+            }};
             
-            const showFeedback = function(buttonId) {
-                const doc = window.parent.document;
+            const showFeedback = function(buttonId) {{
                 const button = doc.getElementById(buttonId);
-                if (button) {
+                if (button) {{
                     const originalText = button.innerHTML;
                     button.innerHTML = '✓';
                     button.style.opacity = '1';
-                    setTimeout(function() {
+                    setTimeout(function() {{
                         button.innerHTML = originalText;
                         button.style.opacity = '0.6';
-                    }, 2000);
-                }
-            };
+                    }}, 2000);
+                }}
+            }};
             
-            // Attach listeners with a slight delay to ensure DOM is ready
-            setTimeout(attachCopyListeners, 100);
-        })();
+            // Use event delegation on document body to handle all copy button clicks
+            doc.body.addEventListener('click', function(e) {{
+                // Check if clicked element is a copy button or inside one
+                const copyButton = e.target.closest('.copy-button');
+                if (copyButton) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const messageId = copyButton.getAttribute('data-message-id');
+                    const text = window.messageTexts[messageId];
+                    
+                    if (!text) {{
+                        console.error('Message text not found for:', messageId);
+                        return;
+                    }}
+                    
+                    const buttonId = copyButton.id;
+                    
+                    // Use modern Clipboard API if available
+                    if (navigator.clipboard && navigator.clipboard.writeText) {{
+                        navigator.clipboard.writeText(text).then(function() {{
+                            showFeedback(buttonId);
+                        }}).catch(function(err) {{
+                            console.error('Failed to copy: ', err);
+                            fallbackCopy(text, buttonId);
+                        }});
+                    }} else {{
+                        fallbackCopy(text, buttonId);
+                    }}
+                }}
+            }});
+        }})();
         </script>
         """, height=0)
 
@@ -284,31 +297,6 @@ def show_chat_interface():
                 "timestamp": current_time
             })
 
-            # Display user message immediately
-            escaped_prompt = html.escape(prompt).replace('\n', '<br>')
-            user_msg_id = f"msg_user_{len(st.session_state.messages)}"
-            button_id = f"copy_btn_{user_msg_id}"
-            data_prompt = html.escape(prompt, quote=True)
-            st.markdown(
-                f"""
-                <div class="chat-message user-message" id="{user_msg_id}">
-                    <div class="message-bubble user-bubble">
-                        <div class="message-content-wrapper">
-                            <div class="message-content">{escaped_prompt}</div>
-                            <div class="message-footer">
-                                <span class="message-timestamp">{current_time}</span>
-                                <button class="copy-button" id="{button_id}" data-copy-text="{data_prompt}" title="Copy message">
-                                    📋
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="message-icon user-icon">👤</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
             # Get response from the assistant
             with st.spinner("Thinking..."):
                 response = query_documents(
@@ -329,33 +317,8 @@ def show_chat_interface():
                     st.rerun()
                     return
 
-            # Display assistant response with markdown rendering
-            response_time = datetime.now().strftime("%H:%M")
-            html_response = markdown_to_html(response)
-            assistant_msg_id = f"msg_assistant_{len(st.session_state.messages) + 1}"
-            button_id = f"copy_btn_{assistant_msg_id}"
-            data_response = html.escape(response, quote=True)
-            st.markdown(
-                f"""
-                <div class="chat-message assistant-message" id="{assistant_msg_id}">
-                    <div class="message-icon assistant-icon">🤖</div>
-                    <div class="message-bubble assistant-bubble">
-                        <div class="message-content-wrapper">
-                            <div class="message-content">{html_response}</div>
-                            <div class="message-footer">
-                                <span class="message-timestamp">{response_time}</span>
-                                <button class="copy-button" id="{button_id}" data-copy-text="{data_response}" title="Copy message">
-                                    📋
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
             # Add assistant response to chat history
+            response_time = datetime.now().strftime("%H:%M")
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": response,
@@ -364,76 +327,6 @@ def show_chat_interface():
 
             # Reset thinking state to False
             st.session_state.is_thinking = False
-            
-            # Attach event listeners to newly added copy buttons
-            components.html("""
-            <script>
-            (function() {
-                const attachCopyListeners = function() {
-                    const doc = window.parent.document;
-                    const copyButtons = doc.querySelectorAll('.copy-button');
-                    
-                    copyButtons.forEach(function(button) {
-                        if (button.dataset.listenerAttached) return;
-                        button.dataset.listenerAttached = 'true';
-                        
-                        button.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            const text = this.getAttribute('data-copy-text');
-                            const buttonId = this.id;
-                            
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(text).then(function() {
-                                    showFeedback(buttonId);
-                                }).catch(function(err) {
-                                    console.error('Failed to copy: ', err);
-                                    fallbackCopy(text, buttonId);
-                                });
-                            } else {
-                                fallbackCopy(text, buttonId);
-                            }
-                        });
-                    });
-                };
-                
-                const fallbackCopy = function(text, buttonId) {
-                    const doc = window.parent.document;
-                    const textarea = doc.createElement('textarea');
-                    textarea.value = text;
-                    textarea.style.position = 'fixed';
-                    textarea.style.top = '0';
-                    textarea.style.left = '0';
-                    textarea.style.opacity = '0';
-                    doc.body.appendChild(textarea);
-                    textarea.focus();
-                    textarea.select();
-                    try {
-                        doc.execCommand('copy');
-                        showFeedback(buttonId);
-                    } catch (err) {
-                        console.error('Fallback copy failed: ', err);
-                    }
-                    doc.body.removeChild(textarea);
-                };
-                
-                const showFeedback = function(buttonId) {
-                    const doc = window.parent.document;
-                    const button = doc.getElementById(buttonId);
-                    if (button) {
-                        const originalText = button.innerHTML;
-                        button.innerHTML = '✓';
-                        button.style.opacity = '1';
-                        setTimeout(function() {
-                            button.innerHTML = originalText;
-                            button.style.opacity = '0.6';
-                        }, 2000);
-                    }
-                };
-                
-                setTimeout(attachCopyListeners, 100);
-            })();
-            </script>
-            """, height=0)
 
             # Auto-scroll to bottom and refocus input
             st.markdown("""
